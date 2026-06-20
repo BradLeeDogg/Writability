@@ -26,7 +26,9 @@ win:
       arch: [x64]
     - target: zip
       arch: [x64]
-  artifactName: ${productName}-${version}-${arch}-${target}.${ext}
+  # Applies to the zip target. nsis and portable set their own names below so
+  # the two .exe outputs don't collide. ${target} is not a valid macro here.
+  artifactName: ${productName}-${version}-${arch}.${ext}
 
 nsis:
   oneClick: false
@@ -36,9 +38,10 @@ nsis:
   createDesktopShortcut: true
   createStartMenuShortcut: true
   shortcutName: Writability
+  artifactName: ${productName}-${version}-${arch}-Setup.${ext}
 
 portable:
-  artifactName: ${productName}-${version}-portable.${ext}
+  artifactName: ${productName}-${version}-${arch}-portable.${ext}
 
 # macOS / Linux targets are backlog; defined minimally so the config is valid
 # if the build host changes later.
