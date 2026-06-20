@@ -1,0 +1,61 @@
+import { useEffect } from 'react'
+import { useStore } from './store/useStore'
+import { Library } from './components/Library'
+import { Toolbar } from './components/Toolbar'
+import { OutlinePanel } from './components/OutlinePanel'
+import { Editor } from './components/Editor'
+import { ToolsPanel } from './components/ToolsPanel'
+
+export default function App(): JSX.Element {
+  const ready = useStore((s) => s.ready)
+  const view = useStore((s) => s.view)
+  const current = useStore((s) => s.current)
+  const init = useStore((s) => s.init)
+  const save = useStore((s) => s.save)
+  const focusMode = useStore((s) => s.settings.focusMode)
+  const outlineOpen = useStore((s) => s.outlineOpen)
+  const toolsOpen = useStore((s) => s.toolsOpen)
+
+  useEffect(() => {
+    void init()
+  }, [init])
+
+  // Best-effort flush of pending edits when the window is closing.
+  useEffect(() => {
+    const flush = (): void => {
+      void save()
+    }
+    window.addEventListener('beforeunload', flush)
+    return () => window.removeEventListener('beforeunload', flush)
+  }, [save])
+
+  if (!ready) {
+    return (
+      <div className="splash" role="status" aria-live="polite">
+        <span className="brand-mark" aria-hidden="true">
+          ✎
+        </span>
+        <p>Loading Writability…</p>
+      </div>
+    )
+  }
+
+  if (view === 'library' || !current) {
+    return (
+      <div className="app" data-testid="app">
+        <Library />
+      </div>
+    )
+  }
+
+  return (
+    <div className="app" data-testid="app">
+      <Toolbar />
+      <main className="workspace" data-focus={String(focusMode)}>
+        {!focusMode && outlineOpen && <OutlinePanel />}
+        <Editor key={current.meta.id} />
+        {!focusMode && toolsOpen && <ToolsPanel />}
+      </main>
+    </div>
+  )
+}

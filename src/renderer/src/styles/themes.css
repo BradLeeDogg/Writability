@@ -1,0 +1,123 @@
+/* Theme tokens. Colours are driven by [data-theme], fonts by [data-font], and
+   reading overlays by [data-overlay]. All combinations aim for WCAG-AA text
+   contrast. Spacing custom properties (--font-scale etc.) are set from JS. */
+
+:root {
+  --font-scale: 1.1;
+  --line-spacing: 1.7;
+  --letter-spacing: 0.01em;
+  --para-spacing: 0.8em;
+  --max-line-width: 68ch;
+
+  --ui-font: system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --reading-font: 'Atkinson Hyperlegible', system-ui, sans-serif;
+
+  --radius: 10px;
+  --radius-sm: 7px;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.06), 0 6px 18px rgba(0, 0, 0, 0.06);
+}
+
+/* Reading font choices ---------------------------------------------------- */
+:root[data-font='system'] {
+  --reading-font: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+}
+:root[data-font='serif'] {
+  --reading-font: Georgia, 'Times New Roman', Cambria, serif;
+}
+:root[data-font='atkinson'] {
+  --reading-font: 'Atkinson Hyperlegible', system-ui, sans-serif;
+}
+:root[data-font='opendyslexic'] {
+  --reading-font: 'OpenDyslexic', 'Atkinson Hyperlegible', sans-serif;
+}
+
+/* Calm light (default) ---------------------------------------------------- */
+:root,
+:root[data-theme='calm-light'] {
+  --bg: #f6f4ee;
+  --surface: #fffdf8;
+  --surface-2: #efece3;
+  --text: #23272e;
+  --text-muted: #5d6470;
+  --border: #ddd8cc;
+  --accent: #3a6f6a;
+  --accent-hover: #2f5b57;
+  --accent-contrast: #ffffff;
+  --editor-bg: #fffdf8;
+  --editor-text: #23272e;
+  --focus-ring: #2f6f8f;
+  --danger: #a23b3b;
+  --selection: #bfe0db;
+}
+
+/* Calm dark --------------------------------------------------------------- */
+:root[data-theme='calm-dark'] {
+  --bg: #14181d;
+  --surface: #1d232b;
+  --surface-2: #262d36;
+  --text: #e7e9ec;
+  --text-muted: #a3acb8;
+  --border: #313945;
+  --accent: #6fb3ac;
+  --accent-hover: #84c4bd;
+  --accent-contrast: #10241f;
+  --editor-bg: #1b2128;
+  --editor-text: #e7e9ec;
+  --focus-ring: #7fc0e0;
+  --danger: #e08585;
+  --selection: #2f4f4a;
+}
+
+/* Sepia ------------------------------------------------------------------- */
+:root[data-theme='sepia'] {
+  --bg: #ece2cb;
+  --surface: #f6efdc;
+  --surface-2: #e4d9bd;
+  --text: #3b3120;
+  --text-muted: #6b5d44;
+  --border: #cdbf9d;
+  --accent: #8a5a2b;
+  --accent-hover: #744a22;
+  --accent-contrast: #fdf6e6;
+  --editor-bg: #f6efdc;
+  --editor-text: #3b3120;
+  --focus-ring: #9a6a2b;
+  --danger: #9c3a2a;
+  --selection: #e6cf9a;
+}
+
+/* High contrast ----------------------------------------------------------- */
+:root[data-theme='high-contrast'] {
+  --bg: #000000;
+  --surface: #0a0a0a;
+  --surface-2: #161616;
+  --text: #ffffff;
+  --text-muted: #e6e6e6;
+  --border: #ffffff;
+  --accent: #ffd400;
+  --accent-hover: #ffe44d;
+  --accent-contrast: #000000;
+  --editor-bg: #000000;
+  --editor-text: #ffffff;
+  --focus-ring: #ffd400;
+  --danger: #ff8a80;
+  --selection: #2b50ff;
+}
+
+/* Reading overlays (visual-stress tints applied to the editor surface) ---- */
+:root[data-overlay='cream'] {
+  --editor-bg: #fbf3d8;
+  --editor-text: #2c2718;
+}
+:root[data-overlay='rose'] {
+  --editor-bg: #fbeef0;
+  --editor-text: #2c2226;
+}
+:root[data-overlay='blue'] {
+  --editor-bg: #e9f1fb;
+  --editor-text: #1d2530;
+}
+:root[data-overlay='green'] {
+  --editor-bg: #eaf4ec;
+  --editor-text: #1e2a21;
+}

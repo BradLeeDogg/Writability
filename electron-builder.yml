@@ -1,0 +1,54 @@
+appId: com.writability.app
+productName: Writability
+copyright: Copyright © 2026 Writability
+
+directories:
+  buildResources: build
+  output: release
+
+# Bundle the built output plus package metadata. Native deps (better-sqlite3)
+# are unpacked so the .node binary is loadable from the asar archive.
+files:
+  - out/**/*
+  - package.json
+  - "!**/*.map"
+
+asarUnpack:
+  - "**/*.node"
+  - node_modules/better-sqlite3/**
+
+# Don't try to sign / notarize in CI; builds are intentionally unsigned for now.
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+    - target: portable
+      arch: [x64]
+    - target: zip
+      arch: [x64]
+  artifactName: ${productName}-${version}-${arch}-${target}.${ext}
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  allowElevation: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: Writability
+
+portable:
+  artifactName: ${productName}-${version}-portable.${ext}
+
+# macOS / Linux targets are backlog; defined minimally so the config is valid
+# if the build host changes later.
+mac:
+  category: public.app-category.education
+  target:
+    - dmg
+    - zip
+
+linux:
+  category: Office
+  target:
+    - AppImage
