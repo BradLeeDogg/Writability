@@ -7,6 +7,13 @@ import { app, BrowserWindow } from 'electron'
 const PROBE = `(async () => {
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const q = (sel) => document.querySelector(sel);
+  const setValue = (el, value) => {
+    const proto = el.tagName === 'TEXTAREA'
+      ? window.HTMLTextAreaElement.prototype
+      : window.HTMLInputElement.prototype;
+    Object.getOwnPropertyDescriptor(proto, 'value').set.call(el, value);
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+  };
   async function waitFor(sel, label, timeout = 10000) {
     const start = Date.now();
     while (Date.now() - start < timeout) {
@@ -34,6 +41,13 @@ const PROBE = `(async () => {
   if (!document.querySelector('[data-testid="outline-node"]')) {
     throw new Error('outline rendered no scaffold steps');
   }
+
+  // Assignment decoder (the default tools tab): decode a prompt into a checklist.
+  await waitFor('[data-testid="assignment-panel"]', 'assignment panel');
+  const prompt = await waitFor('[data-testid="assignment-prompt"]', 'assignment prompt');
+  setValue(prompt, 'Write a 600-word essay. Analyse the theme. Use at least 3 sources in MLA style.');
+  (await waitFor('[data-testid="decode-assignment"]', 'decode button')).click();
+  await waitFor('[data-testid="requirement-item"]', 'a decoded requirement');
 
   // Tools panel tabs.
   (await waitFor('[data-testid="tab-clarity"]', 'clarity tab')).click();

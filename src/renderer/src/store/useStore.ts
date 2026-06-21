@@ -1,5 +1,7 @@
 import { create } from 'zustand'
 import { applySettings } from '../lib/theme'
+import { decodeAssignment } from '@shared/assignment'
+import { uid } from '@shared/ids'
 import type { ExportResult } from '@shared/api'
 import { DEFAULT_SETTINGS } from '@shared/types'
 import type {
@@ -9,11 +11,12 @@ import type {
   ExportFormat,
   OutlineNode,
   Paper,
-  PaperSummary
+  PaperSummary,
+  RequirementItem
 } from '@shared/types'
 
 type View = 'library' | 'editor'
-type ToolsTab = 'clarity' | 'citations' | 'settings'
+type ToolsTab = 'assignment' | 'clarity' | 'citations' | 'settings'
 type SaveState = 'idle' | 'saving' | 'saved' | 'error'
 
 interface StoreState {
@@ -50,6 +53,14 @@ interface StoreState {
   addSource: (source: CitationSource) => void
   updateSource: (id: string, patch: Partial<CitationSource>) => void
   removeSource: (id: string) => void
+
+  // assignment
+  setAssignmentPrompt: (prompt: string) => void
+  /** Decode the prompt and merge in any new requirements. Returns how many were added. */
+  decodeAssignment: () => number
+  addRequirement: (text: string) => void
+  toggleRequirement: (id: string) => void
+  removeRequirement: (id: string) => void
 
   // saving
   save: () => Promise<void>
@@ -109,7 +120,7 @@ export const useStore = create<StoreState>()((set, get) => {
     saveState: 'idle',
     outlineOpen: true,
     toolsOpen: true,
-    toolsTab: 'clarity',
+    toolsTab: 'assignment',
 
     async init() {
       const [settings, papers] = await Promise.all([window.api.getSettings(), window.api.listPapers()])
@@ -203,6 +214,65 @@ export const useStore = create<StoreState>()((set, get) => {
       const cur = get().current
       if (!cur) return
       patchContent({ sources: cur.content.sources.filter((s) => s.id !== id) })
+    },
+
+    setAssignmentPrompt(prompt) {
+      const cur = get().current
+      if (!cur) return
+      patchContent({ assignment: { ...cur.content.assignment, prompt } })
+    },
+
+    decodeAssignment() {
+      const cur = get().current
+      if (!cur) return 0
+      const { requirements } = decodeAssignment(cur.content.assignment.prompt)
+      const existing = cur.content.assignment.requirements
+      const have = new Set(existing.map((r) => r.text.toLowerCase()))
+      const additions: RequirementItem[] = requirements
+        .filter((text) => !have.has(text.toLowerCase()))
+        .map((text) => ({ id: uid('req'), text, done: false, source: 'auto' as const }))
+      if (additions.length === 0) return 0
+      patchContent({
+        assignment: { ...cur.content.assignment, requirements: [...existing, ...additions] }
+      })
+      return additions.length
+    },
+
+    addRequirement(text) {
+      const cur = get().current
+      const trimmed = text.trim()
+      if (!cur || !trimmed) return
+      const item: RequirementItem = { id: uid('req'), text: trimmed, done: false, source: 'manual' }
+      patchContent({
+        assignment: {
+          ...cur.content.assignment,
+          requirements: [...cur.content.assignment.requirements, item]
+        }
+      })
+    },
+
+    toggleRequirement(id) {
+      const cur = get().current
+      if (!cur) return
+      patchContent({
+        assignment: {
+          ...cur.content.assignment,
+          requirements: cur.content.assignment.requirements.map((r) =>
+            r.id === id ? { ...r, done: !r.done } : r
+          )
+        }
+      })
+    },
+
+    removeRequirement(id) {
+      const cur = get().current
+      if (!cur) return
+      patchContent({
+        assignment: {
+          ...cur.content.assignment,
+          requirements: cur.content.assignment.requirements.filter((r) => r.id !== id)
+        }
+      })
     },
 
     async save() {

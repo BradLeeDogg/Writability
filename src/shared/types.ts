@@ -46,6 +46,22 @@ export interface PaperMeta {
   wordGoal?: number
 }
 
+/** One concrete, checkable requirement pulled from (or added to) the prompt. */
+export interface RequirementItem {
+  id: string
+  text: string
+  done: boolean
+  /** 'auto' = produced by the decoder, 'manual' = added by the student. */
+  source: 'auto' | 'manual'
+}
+
+/** The assignment prompt and the literal requirements decoded from it. */
+export interface Assignment {
+  /** The raw prompt / rubric the student pasted or typed. */
+  prompt: string
+  requirements: RequirementItem[]
+}
+
 export interface PaperContent {
   /** TipTap / ProseMirror JSON document for the main prose. */
   doc: unknown
@@ -53,6 +69,8 @@ export interface PaperContent {
   outline: OutlineNode[]
   /** Citation sources gathered for this paper. */
   sources: CitationSource[]
+  /** The decoded assignment prompt + requirement checklist. */
+  assignment: Assignment
 }
 
 export interface Paper {

@@ -691,6 +691,90 @@ fieldset.field {
   margin-top: 0;
 }
 
+/* --- Assignment decoder --------------------------------------------------- */
+.assignment-prompt {
+  margin-bottom: 0.6rem;
+}
+.assignment-note {
+  font-size: 0.85rem;
+  color: var(--accent);
+  margin: 0.5rem 0 0;
+}
+.cmd-words,
+.requirements {
+  margin-top: 1.2rem;
+}
+.cmd-words h3,
+.requirements h3 {
+  font-size: 0.95rem;
+  margin: 0 0 0.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.requirements .count {
+  background: var(--surface-2);
+  border-radius: 999px;
+  padding: 0 0.5rem;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  font-weight: 400;
+}
+.cmd-words ul,
+.requirement-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+.cmd-word {
+  border-left: 3px solid var(--accent);
+  padding-left: 0.6rem;
+}
+.cmd-term {
+  margin: 0;
+  font-weight: 600;
+  text-transform: capitalize;
+}
+.cmd-meaning {
+  margin: 0.15rem 0 0;
+  font-size: 0.9rem;
+}
+.cmd-example {
+  margin: 0.2rem 0 0;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  font-style: italic;
+}
+.requirement {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.4rem;
+}
+.requirement-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.45rem;
+  cursor: pointer;
+  flex: 1;
+}
+.requirement-check input {
+  width: auto;
+  margin-top: 0.2rem;
+}
+.requirement-text {
+  font-size: 0.9rem;
+}
+.requirement-text.done {
+  text-decoration: line-through;
+  color: var(--text-muted);
+}
+.add-requirement {
+  margin-top: 0.8rem;
+}
+
 /* --- Settings ------------------------------------------------------------- */
 .setting {
   margin: 0 0 1rem;

@@ -1,4 +1,5 @@
 import { useStore } from '../store/useStore'
+import { AssignmentPanel } from './AssignmentPanel'
 import { ClarityPanel } from './ClarityPanel'
 import { CitationsPanel } from './CitationsPanel'
 import { SettingsPanel } from './SettingsPanel'
@@ -11,6 +12,15 @@ export function ToolsPanel(): JSX.Element {
   return (
     <aside className="panel tools" aria-label="Writing tools">
       <div className="tabs" role="tablist" aria-label="Tools">
+        <button
+          role="tab"
+          aria-selected={tab === 'assignment'}
+          data-testid="tab-assignment"
+          className={'tab' + (tab === 'assignment' ? ' active' : '')}
+          onClick={() => setTab('assignment')}
+        >
+          Assignment
+        </button>
         <button
           role="tab"
           aria-selected={tab === 'clarity'}
@@ -44,6 +54,7 @@ export function ToolsPanel(): JSX.Element {
       </div>
 
       <div className="tab-body">
+        {tab === 'assignment' && <AssignmentPanel />}
         {tab === 'clarity' && <ClarityPanel />}
         {tab === 'citations' && <CitationsPanel />}
         {tab === 'settings' && <SettingsPanel />}

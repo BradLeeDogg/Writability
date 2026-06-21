@@ -7,6 +7,7 @@ import { getSettings, saveSettings } from './services/settings'
 import { renderExport } from './services/export'
 import { dataDir } from './services/paths'
 import { analyzeClarity } from '@shared/clarity'
+import { decodeAssignment } from '@shared/assignment'
 import { formatCitation } from '@shared/citations'
 import { docToPlainText } from '@shared/doc'
 import { makeOutline, outlineProgress } from '@shared/outline-templates'
@@ -56,6 +57,10 @@ export async function runSelftest(): Promise<void> {
     }
     paper.content.outline[0].text = 'My working thesis.'
     paper.content.outline[0].done = true
+    paper.content.assignment = {
+      prompt: 'Analyse the causes of the war.',
+      requirements: [{ id: 'req-1', text: 'Write 500 words', done: false, source: 'auto' }]
+    }
     paper.content.sources.push({
       id: 'src-1',
       type: 'book',
@@ -74,6 +79,9 @@ export async function runSelftest(): Promise<void> {
     assert.ok(reopened!.content.outline.some((n) => n.children.length > 0), 'nesting survives save')
     assert.equal(reopened!.content.sources.length, 1)
     assert.equal(reopened!.content.sources[0].title, 'A Serious Book')
+    assert.equal(reopened!.content.assignment.prompt, 'Analyse the causes of the war.')
+    assert.equal(reopened!.content.assignment.requirements.length, 1)
+    assert.equal(reopened!.content.assignment.requirements[0].text, 'Write 500 words')
     assert.ok(docToPlainText(reopened!.content.doc).includes('Hello world'))
     pass('paper persistence (sqlite + sidecar)')
 
@@ -104,6 +112,26 @@ export async function runSelftest(): Promise<void> {
     assert.ok(report.issues.some((i) => i.type === 'ambiguous-pronoun'), 'flags ambiguous pronoun')
     assert.ok(report.readingLabel.length > 0)
     pass('clarity heuristics')
+
+    // --- assignment decoder ---------------------------------------------
+    const decoded = decodeAssignment(
+      'Write a 750-word essay in which you critically evaluate the causes of the conflict. ' +
+        'Use at least 3 scholarly sources and format your citations in MLA style. ' +
+        'You must include a clear thesis statement.'
+    )
+    assert.ok(
+      decoded.commandWords.some((c) => c.term === 'critically evaluate'),
+      'decoder finds the command phrase'
+    )
+    assert.ok(
+      !decoded.commandWords.some((c) => c.term === 'evaluate'),
+      'decoder drops the word contained in the longer phrase'
+    )
+    assert.ok(decoded.requirements.some((r) => /750/.test(r)), 'decoder finds the word count')
+    assert.ok(decoded.requirements.some((r) => /at least 3 sources/i.test(r)), 'decoder finds source count')
+    assert.ok(decoded.requirements.some((r) => /MLA/.test(r)), 'decoder finds citation style')
+    assert.ok(decoded.requirements.some((r) => /thesis statement/i.test(r)), 'decoder finds thesis requirement')
+    pass('assignment decoder')
 
     // --- citations ------------------------------------------------------
     const mla = formatCitation(

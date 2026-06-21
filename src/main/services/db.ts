@@ -4,12 +4,15 @@ import { ensureDir } from './atomic'
 import { paperDbPath } from './paths'
 import { emptyDoc } from '@shared/doc'
 import type {
+  Assignment,
   CitationSource,
   OutlineKind,
   OutlineNode,
   PaperContent,
   SourceType
 } from '@shared/types'
+
+const EMPTY_ASSIGNMENT: Assignment = { prompt: '', requirements: [] }
 
 const SCHEMA_VERSION = 1
 
@@ -110,13 +113,22 @@ export function readContent(db: Database.Database): PaperContent {
   const sourceRows = db.prepare('SELECT * FROM sources ORDER BY position ASC').all() as SourceRow[]
   const sources = sourceRows.map(rowToSource)
 
-  return { doc, outline, sources }
+  const asgRow = db.prepare(`SELECT value FROM meta WHERE key = 'assignment'`).get() as
+    | { value: string }
+    | undefined
+  const assignment = asgRow?.value ? safeParse<Assignment>(asgRow.value, EMPTY_ASSIGNMENT) : EMPTY_ASSIGNMENT
+
+  return { doc, outline, sources, assignment }
 }
 
 export function writeContent(db: Database.Database, content: PaperContent): void {
   const tx = db.transaction((c: PaperContent) => {
     db.prepare('INSERT OR REPLACE INTO doc (id, json) VALUES (1, ?)').run(
       JSON.stringify(c.doc ?? emptyDoc())
+    )
+
+    db.prepare(`INSERT OR REPLACE INTO meta (key, value) VALUES ('assignment', ?)`).run(
+      JSON.stringify(c.assignment ?? EMPTY_ASSIGNMENT)
     )
 
     db.prepare('DELETE FROM outline_nodes').run()
