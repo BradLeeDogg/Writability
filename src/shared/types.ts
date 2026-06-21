@@ -44,6 +44,8 @@ export interface PaperMeta {
   updatedAt: string
   /** Optional target so progress can be shown gently. */
   wordGoal?: number
+  /** Optional due date (YYYY-MM-DD) for the deadline back-planner. */
+  dueDate?: string
 }
 
 /** One concrete, checkable requirement pulled from (or added to) the prompt. */
@@ -71,6 +73,8 @@ export interface PaperContent {
   sources: CitationSource[]
   /** The decoded assignment prompt + requirement checklist. */
   assignment: Assignment
+  /** Free, judgement-free "brain dump" scratch space (no clarity checks, no word count). */
+  scratch: string
 }
 
 export interface Paper {
@@ -111,6 +115,8 @@ export interface AppSettings {
   maxLineWidth: number
   /** Distraction-reduced focus mode. */
   focusMode: boolean
+  /** Preferred length of a focus-timer work session, in minutes. */
+  focusTimerMinutes: number
   /** Respect/force reduced motion. */
   reduceMotion: boolean
   /** Tinted overlay for visual stress (Irlen-style). */
@@ -132,6 +138,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   paragraphSpacing: 0.8,
   maxLineWidth: 68,
   focusMode: false,
+  focusTimerMinutes: 25,
   reduceMotion: false,
   overlayTint: 'none',
   ttsRate: 1,

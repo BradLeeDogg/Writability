@@ -1,15 +1,21 @@
 import { useStore } from '../store/useStore'
 import { findThesisNode, outlineProgress } from '@shared/outline-templates'
 import { checkOnThesis } from '@shared/thesis'
+import { backPlan, nextAction } from '@shared/planner'
 import type { OutlineNode } from '@shared/types'
 
 export function OutlinePanel(): JSX.Element {
   const current = useStore((s) => s.current)!
   const toggleOutline = useStore((s) => s.toggleOutline)
   const addBodyParagraph = useStore((s) => s.addBodyParagraph)
+  const setDueDate = useStore((s) => s.setDueDate)
   const progress = outlineProgress(current.content.outline)
   const pct = progress.total ? Math.round((progress.done / progress.total) * 100) : 0
   const thesisText = findThesisNode(current.content.outline)?.text ?? ''
+  const next = nextAction(current.content.outline)
+  const plan = current.meta.dueDate
+    ? backPlan(current.meta.dueDate, progress.total - progress.done)
+    : null
 
   return (
     <aside className="panel outline" data-testid="outline" aria-label="Outline">
@@ -27,6 +33,36 @@ export function OutlinePanel(): JSX.Element {
         <span className="progress-label">
           {progress.done} / {progress.total} steps
         </span>
+      </div>
+
+      <div className="next-step" data-testid="next-step">
+        {next ? (
+          <>
+            <span className="next-step-eyebrow">Your next step</span>
+            <p className="next-step-label">{next.label}</p>
+            <p className="next-step-prompt">{next.prompt}</p>
+          </>
+        ) : (
+          <p className="next-step-done">Every step is checked off. Nicely done.</p>
+        )}
+      </div>
+
+      <div className="planner">
+        <label className="planner-due">
+          <span>Due date</span>
+          <input
+            type="date"
+            data-testid="due-date"
+            value={current.meta.dueDate ?? ''}
+            aria-label="Due date"
+            onChange={(e) => setDueDate(e.target.value)}
+          />
+        </label>
+        {plan && (
+          <p className={'planner-msg' + (plan.overdueDays > 0 ? ' overdue' : '')} role="status">
+            {plan.message}
+          </p>
+        )}
       </div>
 
       <ol className="outline-list">

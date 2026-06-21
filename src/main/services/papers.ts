@@ -48,7 +48,8 @@ export function createPaper(input: CreatePaperInput): Paper {
     doc: emptyDoc(),
     outline: makeOutline(input.essayType),
     sources: [],
-    assignment: { prompt: '', requirements: [] }
+    assignment: { prompt: '', requirements: [] },
+    scratch: ''
   }
   const db = openPaperDb(id)
   try {

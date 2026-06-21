@@ -118,7 +118,12 @@ export function readContent(db: Database.Database): PaperContent {
     | undefined
   const assignment = asgRow?.value ? safeParse<Assignment>(asgRow.value, EMPTY_ASSIGNMENT) : EMPTY_ASSIGNMENT
 
-  return { doc, outline, sources, assignment }
+  const scratchRow = db.prepare(`SELECT value FROM meta WHERE key = 'scratch'`).get() as
+    | { value: string }
+    | undefined
+  const scratch = scratchRow?.value ?? ''
+
+  return { doc, outline, sources, assignment, scratch }
 }
 
 export function writeContent(db: Database.Database, content: PaperContent): void {
@@ -130,6 +135,7 @@ export function writeContent(db: Database.Database, content: PaperContent): void
     db.prepare(`INSERT OR REPLACE INTO meta (key, value) VALUES ('assignment', ?)`).run(
       JSON.stringify(c.assignment ?? EMPTY_ASSIGNMENT)
     )
+    db.prepare(`INSERT OR REPLACE INTO meta (key, value) VALUES ('scratch', ?)`).run(c.scratch ?? '')
 
     db.prepare('DELETE FROM outline_nodes').run()
     const insNode = db.prepare(`

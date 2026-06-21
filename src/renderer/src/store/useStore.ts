@@ -17,7 +17,7 @@ import type {
 } from '@shared/types'
 
 type View = 'library' | 'editor'
-type ToolsTab = 'assignment' | 'clarity' | 'citations' | 'settings'
+type ToolsTab = 'assignment' | 'braindump' | 'clarity' | 'citations' | 'settings'
 type SaveState = 'idle' | 'saving' | 'saved' | 'error'
 
 interface StoreState {
@@ -49,6 +49,8 @@ interface StoreState {
   // editing
   setDoc: (doc: unknown) => void
   setTitle: (title: string) => void
+  setScratch: (text: string) => void
+  setDueDate: (date: string) => void
   setOutlineText: (id: string, text: string) => void
   toggleOutlineDone: (id: string) => void
   addBodyParagraph: () => void
@@ -184,6 +186,17 @@ export const useStore = create<StoreState>()((set, get) => {
       const cur = get().current
       if (!cur) return
       set({ current: { ...cur, meta: { ...cur.meta, title } } })
+      scheduleSave()
+    },
+
+    setScratch(text) {
+      patchContent({ scratch: text })
+    },
+
+    setDueDate(date) {
+      const cur = get().current
+      if (!cur) return
+      set({ current: { ...cur, meta: { ...cur.meta, dueDate: date || undefined } } })
       scheduleSave()
     },
 

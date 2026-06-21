@@ -18,6 +18,7 @@ import {
   outlineProgress
 } from '@shared/outline-templates'
 import { checkOnThesis } from '@shared/thesis'
+import { backPlan, nextAction } from '@shared/planner'
 
 // Main-process assertions. Runs with WP_SELFTEST=1 and exits without UI.
 export async function runSelftest(): Promise<void> {
@@ -72,6 +73,28 @@ export async function runSelftest(): Promise<void> {
     )
     pass('outline editing + thesis check')
 
+    // --- planner: next action + deadline back-plan ----------------------
+    const planOutline = makeOutline('argument')
+    const firstAction = nextAction(planOutline)
+    assert.ok(firstAction && /thesis/i.test(firstAction.label), 'next action starts at the thesis')
+    const markAll = (list: typeof planOutline): void => {
+      for (const n of list) {
+        n.done = true
+        markAll(n.children)
+      }
+    }
+    markAll(planOutline)
+    assert.equal(nextAction(planOutline), null, 'no next action when everything is done')
+
+    const now = new Date(2026, 0, 1)
+    const future = backPlan('2026-01-05', 8, now)
+    assert.ok(future && future.perToday === 2, 'back-plan splits 8 steps across 5 days as ~2/day')
+    const dueToday = backPlan('2026-01-01', 3, now)
+    assert.ok(dueToday && /today/.test(dueToday.message), 'due-today wording')
+    const overdue = backPlan('2025-12-30', 4, now)
+    assert.ok(overdue && overdue.overdueDays === 2, 'overdue is detected')
+    pass('planner (next action + back-plan)')
+
     // --- paper create / save / reopen (SQLite + sidecar) ----------------
     const paper = createPaper({ title: 'Self-test paper', essayType: 'argument' })
     assert.ok(paper.meta.id.startsWith('paper-'))
@@ -94,6 +117,8 @@ export async function runSelftest(): Promise<void> {
       prompt: 'Analyse the causes of the war.',
       requirements: [{ id: 'req-1', text: 'Write 500 words', done: false, source: 'auto' }]
     }
+    paper.content.scratch = 'messy half-formed notes that should survive a reload'
+    paper.meta.dueDate = '2026-12-01'
     paper.content.sources.push({
       id: 'src-1',
       type: 'book',
@@ -115,6 +140,8 @@ export async function runSelftest(): Promise<void> {
     assert.equal(reopened!.content.assignment.prompt, 'Analyse the causes of the war.')
     assert.equal(reopened!.content.assignment.requirements.length, 1)
     assert.equal(reopened!.content.assignment.requirements[0].text, 'Write 500 words')
+    assert.equal(reopened!.content.scratch, 'messy half-formed notes that should survive a reload')
+    assert.equal(reopened!.meta.dueDate, '2026-12-01')
     assert.ok(docToPlainText(reopened!.content.doc).includes('Hello world'))
     pass('paper persistence (sqlite + sidecar)')
 

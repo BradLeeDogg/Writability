@@ -484,6 +484,83 @@ fieldset.field {
   border-radius: var(--radius-sm);
 }
 
+/* Next-step coach + deadline back-planner */
+.next-step {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius-sm);
+  padding: 0.55rem 0.7rem;
+  margin-bottom: 0.7rem;
+}
+.next-step-eyebrow {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--accent);
+}
+.next-step-label {
+  margin: 0.2rem 0 0;
+  font-weight: 600;
+}
+.next-step-prompt {
+  margin: 0.15rem 0 0;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+.next-step-done {
+  margin: 0;
+  color: var(--accent);
+  font-weight: 600;
+}
+.planner {
+  margin-bottom: 0.9rem;
+}
+.planner-due {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+.planner-due input {
+  width: auto;
+}
+.planner-msg {
+  margin: 0.4rem 0 0;
+  font-size: 0.85rem;
+  background: var(--surface-2);
+  border-radius: var(--radius-sm);
+  padding: 0.35rem 0.5rem;
+}
+.planner-msg.overdue {
+  color: var(--danger);
+}
+
+/* Brain dump */
+.braindump-text {
+  min-height: 50vh;
+  font-size: 1rem;
+  line-height: 1.6;
+}
+
+/* Focus timer (toolbar) */
+.focus-timer {
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+}
+.timer-menu .menu-body {
+  min-width: 150px;
+}
+.focus-timer-note {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  max-width: 18rem;
+}
+
 /* --- Editor --------------------------------------------------------------- */
 .editor-wrap {
   display: flex;

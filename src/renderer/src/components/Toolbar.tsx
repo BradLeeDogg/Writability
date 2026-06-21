@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useStore } from '../store/useStore'
+import { FocusTimer } from './FocusTimer'
 import { speak, stopSpeaking, ttsSupported } from '../lib/tts'
 import { docToPlainText } from '@shared/doc'
 import { ESSAY_TYPE_LABELS } from '@shared/types'
@@ -70,6 +71,8 @@ export function Toolbar(): JSX.Element {
       </div>
 
       <div className="toolbar-right">
+        <FocusTimer />
+
         {ttsSupported() && (
           <button
             className={'ghost' + (speaking ? ' active' : '')}

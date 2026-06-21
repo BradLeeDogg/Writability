@@ -13,6 +13,7 @@ const PROBE = `(async () => {
       : window.HTMLInputElement.prototype;
     Object.getOwnPropertyDescriptor(proto, 'value').set.call(el, value);
     el.dispatchEvent(new Event('input', { bubbles: true }));
+    el.dispatchEvent(new Event('change', { bubbles: true }));
   };
   async function waitFor(sel, label, timeout = 10000) {
     const start = Date.now();
@@ -52,12 +53,25 @@ const PROBE = `(async () => {
   const afterNodes = document.querySelectorAll('[data-testid="outline-node"]').length;
   if (afterNodes <= beforeNodes) throw new Error('add body paragraph did not add outline nodes');
 
+  // Next-step coach and deadline back-planner live in the outline.
+  await waitFor('[data-testid="next-step"]', 'next-step coach');
+  setValue(await waitFor('[data-testid="due-date"]', 'due date input'), '2030-01-01');
+
+  // Focus timer in the toolbar: start, then pause.
+  (await waitFor('[data-testid="timer-toggle"]', 'focus timer')).click();
+  await sleep(60);
+  q('[data-testid="timer-toggle"]').click();
+
   // Assignment decoder (the default tools tab): decode a prompt into a checklist.
   await waitFor('[data-testid="assignment-panel"]', 'assignment panel');
   const prompt = await waitFor('[data-testid="assignment-prompt"]', 'assignment prompt');
   setValue(prompt, 'Write a 600-word essay. Analyse the theme. Use at least 3 sources in MLA style.');
   (await waitFor('[data-testid="decode-assignment"]', 'decode button')).click();
   await waitFor('[data-testid="requirement-item"]', 'a decoded requirement');
+
+  // Brain dump: a judgement-free scratch space.
+  (await waitFor('[data-testid="tab-braindump"]', 'brain dump tab')).click();
+  setValue(await waitFor('[data-testid="braindump-text"]', 'brain dump textarea'), 'messy thoughts');
 
   // Tools panel tabs.
   (await waitFor('[data-testid="tab-clarity"]', 'clarity tab')).click();
