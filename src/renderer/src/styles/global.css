@@ -455,6 +455,34 @@ fieldset.field {
 .outline-text {
   font-size: 0.92rem;
 }
+.outline-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem;
+}
+.outline-row .outline-check {
+  flex: 1;
+}
+.add-paragraph {
+  width: 100%;
+  margin-top: 0.6rem;
+  border-style: dashed;
+  color: var(--text-muted);
+}
+.add-paragraph:hover {
+  color: var(--text);
+  border-color: var(--accent);
+}
+.thesis-nudge {
+  margin: 0.35rem 0 0;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  background: var(--surface-2);
+  border-left: 3px solid var(--accent);
+  padding: 0.35rem 0.5rem;
+  border-radius: var(--radius-sm);
+}
 
 /* --- Editor --------------------------------------------------------------- */
 .editor-wrap {
@@ -506,6 +534,36 @@ fieldset.field {
   padding: 0.35rem 0.8rem;
   font-size: 0.8rem;
   color: var(--text-muted);
+}
+
+/* Always-visible thesis reminder, docked above the writing area. */
+.thesis-pin {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.45rem 0.8rem;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
+}
+.thesis-pin-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--accent);
+  white-space: nowrap;
+}
+.thesis-pin-input {
+  flex: 1;
+  background: transparent;
+  border-color: transparent;
+  font-family: var(--reading-font);
+  font-size: 0.95rem;
+}
+.thesis-pin-input:hover,
+.thesis-pin-input:focus {
+  background: var(--surface);
+  border-color: var(--border);
 }
 
 /* ProseMirror reading surface */

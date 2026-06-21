@@ -10,7 +10,14 @@ import { analyzeClarity } from '@shared/clarity'
 import { decodeAssignment } from '@shared/assignment'
 import { formatCitation } from '@shared/citations'
 import { docToPlainText } from '@shared/doc'
-import { makeOutline, outlineProgress } from '@shared/outline-templates'
+import {
+  findThesisNode,
+  makeBodyParagraph,
+  makeOutline,
+  nextBodyParagraphNumber,
+  outlineProgress
+} from '@shared/outline-templates'
+import { checkOnThesis } from '@shared/thesis'
 
 // Main-process assertions. Runs with WP_SELFTEST=1 and exits without UI.
 export async function runSelftest(): Promise<void> {
@@ -38,6 +45,32 @@ export async function runSelftest(): Promise<void> {
     const prog = outlineProgress(makeOutline('argument'))
     assert.ok(prog.total > 0 && prog.done === 0)
     pass('outline templates')
+
+    // --- outline editing helpers + thesis check -------------------------
+    const argOutline = makeOutline('argument')
+    const pointsBefore = argOutline.filter((n) => n.kind === 'point').length
+    assert.equal(nextBodyParagraphNumber(argOutline), pointsBefore + 1, 'next point number follows')
+    const newPara = makeBodyParagraph(nextBodyParagraphNumber(argOutline))
+    assert.equal(newPara.kind, 'point')
+    assert.equal(newPara.children.length, 3, 'new body paragraph has evidence/analysis/link')
+    assert.ok(findThesisNode(argOutline)?.kind === 'thesis', 'thesis node is found')
+
+    const onTopic = checkOnThesis(
+      'Recycling reduces landfill waste in cities.',
+      'Recycling lowers the waste that cities send to the landfill each year.'
+    )
+    assert.ok(onTopic.checked && onTopic.onThesis, 'on-topic paragraph passes the thesis check')
+    const offTopic = checkOnThesis(
+      'Recycling reduces landfill waste in cities.',
+      'My favourite football team finally won the championship last season.'
+    )
+    assert.ok(offTopic.checked && !offTopic.onThesis, 'off-topic paragraph is gently flagged')
+    assert.equal(
+      checkOnThesis('Recycling reduces landfill waste.', 'Yes.').checked,
+      false,
+      'too little text is not judged'
+    )
+    pass('outline editing + thesis check')
 
     // --- paper create / save / reopen (SQLite + sidecar) ----------------
     const paper = createPaper({ title: 'Self-test paper', essayType: 'argument' })

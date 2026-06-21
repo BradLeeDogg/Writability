@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { applySettings } from '../lib/theme'
 import { decodeAssignment } from '@shared/assignment'
 import { uid } from '@shared/ids'
+import { makeBodyParagraph, nextBodyParagraphNumber } from '@shared/outline-templates'
 import type { ExportResult } from '@shared/api'
 import { DEFAULT_SETTINGS } from '@shared/types'
 import type {
@@ -50,6 +51,8 @@ interface StoreState {
   setTitle: (title: string) => void
   setOutlineText: (id: string, text: string) => void
   toggleOutlineDone: (id: string) => void
+  addBodyParagraph: () => void
+  removeOutlineNode: (id: string) => void
   addSource: (source: CitationSource) => void
   updateSource: (id: string, patch: Partial<CitationSource>) => void
   removeSource: (id: string) => void
@@ -194,6 +197,26 @@ export const useStore = create<StoreState>()((set, get) => {
       const cur = get().current
       if (!cur) return
       patchContent({ outline: mapNode(cur.content.outline, id, (n) => ({ ...n, done: !n.done })) })
+    },
+
+    addBodyParagraph() {
+      const cur = get().current
+      if (!cur) return
+      const outline = cur.content.outline
+      const para = makeBodyParagraph(nextBodyParagraphNumber(outline))
+      // Slot it in before a trailing Conclusion, if there is one.
+      const idx = outline.findIndex((n) => n.kind === 'section' && /conclusion/i.test(n.label))
+      const next =
+        idx >= 0 ? [...outline.slice(0, idx), para, ...outline.slice(idx)] : [...outline, para]
+      patchContent({ outline: next })
+    },
+
+    removeOutlineNode(id) {
+      const cur = get().current
+      if (!cur) return
+      const prune = (list: OutlineNode[]): OutlineNode[] =>
+        list.filter((n) => n.id !== id).map((n) => ({ ...n, children: prune(n.children) }))
+      patchContent({ outline: prune(cur.content.outline) })
     },
 
     addSource(source) {

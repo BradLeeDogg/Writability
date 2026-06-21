@@ -5,6 +5,7 @@ import StarterKit from '@tiptap/starter-kit'
 import Placeholder from '@tiptap/extension-placeholder'
 import CharacterCount from '@tiptap/extension-character-count'
 import { useStore } from '../store/useStore'
+import { ThesisPin } from './ThesisPin'
 
 export function Editor(): JSX.Element {
   // App only mounts the Editor when a paper is open.
@@ -48,6 +49,7 @@ export function Editor(): JSX.Element {
 
   return (
     <section className="editor-wrap" data-testid="editor" aria-label="Writing area">
+      <ThesisPin />
       <FormatBar editor={editor} />
       <div className="editor-scroll">
         <EditorContent editor={editor} className="editor-surface" />

@@ -17,8 +17,8 @@ function node(
   return { id: uid('node'), kind, label, prompt, text: '', done: false, children }
 }
 
-/** A reusable body paragraph: point → evidence → analysis → link. */
-function bodyParagraph(n: number): OutlineNode {
+/** A reusable body paragraph: point → evidence → analysis → link (PEEL). */
+export function makeBodyParagraph(n: number): OutlineNode {
   return node('point', `Point ${n}`, `State one reason that supports your thesis. One clear sentence is enough.`, [
     node(
       'evidence',
@@ -45,9 +45,9 @@ function argumentOutline(): OutlineNode[] {
       'Thesis',
       `Write the one main idea your whole paper will argue. Try: "I will show that ___ because ___."`
     ),
-    bodyParagraph(1),
-    bodyParagraph(2),
-    bodyParagraph(3),
+    makeBodyParagraph(1),
+    makeBodyParagraph(2),
+    makeBodyParagraph(3),
     node(
       'section',
       'Counterargument',
@@ -73,9 +73,9 @@ function researchOutline(): OutlineNode[] {
       'Background',
       `Give the reader the facts they need before your argument. What should they already know?`
     ),
-    bodyParagraph(1),
-    bodyParagraph(2),
-    bodyParagraph(3),
+    makeBodyParagraph(1),
+    makeBodyParagraph(2),
+    makeBodyParagraph(3),
     node(
       'section',
       'Conclusion',
@@ -107,10 +107,10 @@ function thesisOutline(): OutlineNode[] {
       `Write the central claim your long essay defends. Keep it to one clear sentence.`
     ),
     node('section', 'Introduction', `Set up the topic and end with your thesis. Why should the reader care?`),
-    bodyParagraph(1),
-    bodyParagraph(2),
-    bodyParagraph(3),
-    bodyParagraph(4),
+    makeBodyParagraph(1),
+    makeBodyParagraph(2),
+    makeBodyParagraph(3),
+    makeBodyParagraph(4),
     node('section', 'Conclusion', `Tie the sections together and restate your thesis with its significance.`)
   ]
 }
@@ -135,6 +135,16 @@ const BUILDERS: Record<EssayType, () => OutlineNode[]> = {
 
 export function makeOutline(essayType: EssayType): OutlineNode[] {
   return (BUILDERS[essayType] ?? argumentOutline)()
+}
+
+/** The thesis-like step (always the first node in every template). */
+export function findThesisNode(nodes: OutlineNode[]): OutlineNode | undefined {
+  return nodes.find((n) => n.kind === 'thesis')
+}
+
+/** Next "Point N" number, based on how many body paragraphs already exist. */
+export function nextBodyParagraphNumber(nodes: OutlineNode[]): number {
+  return nodes.filter((n) => n.kind === 'point').length + 1
 }
 
 /** Count of leaf-ish checkable steps + how many are done, for progress. */

@@ -42,6 +42,16 @@ const PROBE = `(async () => {
     throw new Error('outline rendered no scaffold steps');
   }
 
+  // Thesis pin is docked above the writing area.
+  await waitFor('[data-testid="thesis-pin"]', 'thesis pin');
+
+  // Adding a body paragraph grows the outline.
+  const beforeNodes = document.querySelectorAll('[data-testid="outline-node"]').length;
+  (await waitFor('[data-testid="add-body-paragraph"]', 'add paragraph button')).click();
+  await sleep(150);
+  const afterNodes = document.querySelectorAll('[data-testid="outline-node"]').length;
+  if (afterNodes <= beforeNodes) throw new Error('add body paragraph did not add outline nodes');
+
   // Assignment decoder (the default tools tab): decode a prompt into a checklist.
   await waitFor('[data-testid="assignment-panel"]', 'assignment panel');
   const prompt = await waitFor('[data-testid="assignment-prompt"]', 'assignment prompt');
