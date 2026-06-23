@@ -81,6 +81,14 @@ const PROBE = `(async () => {
   (await waitFor('[data-testid="tab-braindump"]', 'brain dump tab')).click();
   setValue(await waitFor('[data-testid="braindump-text"]', 'brain dump textarea'), 'messy thoughts');
 
+  // Understand: summarise a dense source paragraph.
+  (await waitFor('[data-testid="tab-reading"]', 'understand tab')).click();
+  setValue(
+    await waitFor('[data-testid="reading-input"]', 'reading input'),
+    'Climate change is altering rainfall patterns. Many farmers report smaller harvests. Researchers argue that adapting crops could reduce losses.'
+  );
+  await waitFor('[data-testid="reading-result"]', 'reading result');
+
   // Tools panel tabs.
   (await waitFor('[data-testid="tab-clarity"]', 'clarity tab')).click();
   await waitFor('[data-testid="clarity-panel"]', 'clarity panel');

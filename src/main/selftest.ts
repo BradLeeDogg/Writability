@@ -11,6 +11,7 @@ import { decodeAssignment } from '@shared/assignment'
 import { outlineToDocContent } from '@shared/scaffold'
 import { TRANSITIONS } from '@shared/transitions'
 import { GLOSSARY, glossaryMap } from '@shared/glossary'
+import { summarizeSource } from '@shared/reading'
 import { formatCitation } from '@shared/citations'
 import { docToPlainText } from '@shared/doc'
 import {
@@ -230,6 +231,18 @@ export async function runSelftest(): Promise<void> {
     )
     assert.ok((glossaryMap().get('thesis') ?? '').length > 0, 'glossary lookup resolves "thesis"')
     pass('comprehension glossary')
+
+    // --- reading support (source summary) -------------------------------
+    const sourceSummary = summarizeSource(
+      'Climate change is altering rainfall patterns across the region. Many farmers have ' +
+        'reported smaller harvests in recent years. Researchers argue that adapting crop choices ' +
+        'could reduce these losses. The study collected data from two hundred farms over a decade.'
+    )
+    assert.ok(sourceSummary.mainClaim.length > 0, 'reading summary picks a main claim')
+    assert.ok(sourceSummary.keySentences.length >= 1, 'reading summary returns key sentences')
+    assert.ok(sourceSummary.wordCount > 0, 'reading summary counts words')
+    assert.equal(summarizeSource('').mainClaim, '', 'empty source yields no claim')
+    pass('reading support (source summary)')
 
     // --- citations ------------------------------------------------------
     const mla = formatCitation(

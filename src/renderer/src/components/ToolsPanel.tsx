@@ -1,6 +1,7 @@
 import { useStore } from '../store/useStore'
 import { AssignmentPanel } from './AssignmentPanel'
 import { BrainDumpPanel } from './BrainDumpPanel'
+import { ReadingPanel } from './ReadingPanel'
 import { ClarityPanel } from './ClarityPanel'
 import { CitationsPanel } from './CitationsPanel'
 import { SettingsPanel } from './SettingsPanel'
@@ -30,6 +31,15 @@ export function ToolsPanel(): JSX.Element {
           onClick={() => setTab('braindump')}
         >
           Brain dump
+        </button>
+        <button
+          role="tab"
+          aria-selected={tab === 'reading'}
+          data-testid="tab-reading"
+          className={'tab' + (tab === 'reading' ? ' active' : '')}
+          onClick={() => setTab('reading')}
+        >
+          Understand
         </button>
         <button
           role="tab"
@@ -66,6 +76,7 @@ export function ToolsPanel(): JSX.Element {
       <div className="tab-body">
         {tab === 'assignment' && <AssignmentPanel />}
         {tab === 'braindump' && <BrainDumpPanel />}
+        {tab === 'reading' && <ReadingPanel />}
         {tab === 'clarity' && <ClarityPanel />}
         {tab === 'citations' && <CitationsPanel />}
         {tab === 'settings' && <SettingsPanel />}

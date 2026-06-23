@@ -584,6 +584,42 @@ fieldset.field {
   line-height: 1.6;
 }
 
+/* Reading / "Understand" panel */
+.reading-input {
+  margin-bottom: 0.6rem;
+}
+.reading-result {
+  margin-top: 0.8rem;
+}
+.reading-block {
+  margin-bottom: 0.9rem;
+}
+.reading-block h3 {
+  font-size: 0.95rem;
+  margin: 0 0 0.35rem;
+}
+.reading-claim {
+  margin: 0;
+  font-size: 0.95rem;
+  background: var(--surface-2);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius-sm);
+  padding: 0.45rem 0.6rem;
+}
+.reading-key {
+  margin: 0;
+  padding-left: 1.1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: 0.9rem;
+}
+.reading-stats {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  margin: 0.3rem 0 0;
+}
+
 /* Focus timer (toolbar) */
 .focus-timer {
   display: flex;
@@ -747,6 +783,7 @@ fieldset.field {
 .tabs {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 0.25rem;
   border-bottom: 1px solid var(--border);
   margin-bottom: 0.8rem;

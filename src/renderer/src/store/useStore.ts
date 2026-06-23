@@ -17,7 +17,7 @@ import type {
 } from '@shared/types'
 
 type View = 'library' | 'editor'
-type ToolsTab = 'assignment' | 'braindump' | 'clarity' | 'citations' | 'settings'
+type ToolsTab = 'assignment' | 'braindump' | 'reading' | 'clarity' | 'citations' | 'settings'
 type SaveState = 'idle' | 'saving' | 'saved' | 'error'
 
 interface StoreState {
