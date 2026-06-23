@@ -87,6 +87,21 @@ export function savePaper(input: SavePaperInput): SavePaperResult {
   return { ok: true, updatedAt: now }
 }
 
+/**
+ * Write a complete paper exactly as given, preserving its id and timestamps.
+ * Used by backup-restore (unlike savePaper, which stamps a fresh updatedAt).
+ */
+export function importPaper(paper: Paper): void {
+  ensureDir(paperDir(paper.meta.id))
+  const db = openPaperDb(paper.meta.id)
+  try {
+    writeContent(db, paper.content)
+  } finally {
+    db.close()
+  }
+  writeJsonAtomic(paperSidecarPath(paper.meta.id), { meta: paper.meta } satisfies Sidecar)
+}
+
 export function deletePaper(id: string): { ok: boolean } {
   const dir = paperDir(id)
   if (existsSync(dir)) rmSync(dir, { recursive: true, force: true })

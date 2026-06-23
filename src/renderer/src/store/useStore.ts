@@ -3,7 +3,7 @@ import { applySettings } from '../lib/theme'
 import { decodeAssignment } from '@shared/assignment'
 import { uid } from '@shared/ids'
 import { makeBodyParagraph, nextBodyParagraphNumber } from '@shared/outline-templates'
-import type { ExportResult } from '@shared/api'
+import type { BackupResult, ExportResult, RestoreResult } from '@shared/api'
 import { DEFAULT_SETTINGS } from '@shared/types'
 import type {
   AppSettings,
@@ -78,6 +78,14 @@ interface StoreState {
 
   // export
   exportCurrent: (format: ExportFormat) => Promise<ExportResult>
+
+  // backup
+  createBackup: () => Promise<BackupResult>
+  restoreBackup: () => Promise<RestoreResult>
+
+  // onboarding
+  dismissWelcome: () => void
+  replayWelcome: () => void
 }
 
 // --- debounce timers (module scope so they survive re-renders) -------------
@@ -355,6 +363,35 @@ export const useStore = create<StoreState>()((set, get) => {
       if (!cur) return { ok: false, error: 'No paper open' }
       if (get().dirty) await get().save()
       return window.api.exportPaper({ id: cur.meta.id, format })
+    },
+
+    async createBackup() {
+      // Flush any pending edits so the backup is fully up to date.
+      if (get().dirty) await get().save()
+      return window.api.createBackup()
+    },
+
+    async restoreBackup() {
+      const res = await window.api.restoreBackup()
+      if (res.ok && (res.imported ?? 0) > 0) {
+        // A restore can change papers and settings underneath us — reload both
+        // and return to the library so nothing stale stays on screen.
+        const [settings, papers] = await Promise.all([
+          window.api.getSettings(),
+          window.api.listPapers()
+        ])
+        applySettings(settings)
+        set({ settings, papers, current: null, view: 'library' })
+      }
+      return res
+    },
+
+    dismissWelcome() {
+      get().updateSettings({ onboarded: true })
+    },
+
+    replayWelcome() {
+      get().updateSettings({ onboarded: false })
     }
   }
 })

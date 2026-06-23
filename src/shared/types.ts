@@ -129,6 +129,8 @@ export interface AppSettings {
   ttsRate: number
   /** Show the clarity panel results. */
   showClarity: boolean
+  /** Has the student seen the first-run welcome guide? */
+  onboarded: boolean
   /** Id of the last paper opened, so we can restore it on launch. */
   lastPaperId?: string
 }
@@ -148,7 +150,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   reduceMotion: false,
   overlayTint: 'none',
   ttsRate: 1,
-  showClarity: true
+  showClarity: true,
+  onboarded: false
 }
 
 // ---------------------------------------------------------------------------

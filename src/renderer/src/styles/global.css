@@ -577,6 +577,68 @@ fieldset.field {
   color: var(--danger);
 }
 
+/* First-run welcome guide */
+.welcome-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  background: rgba(0, 0, 0, 0.38);
+}
+.welcome-card {
+  width: min(30rem, 100%);
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg, 14px);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.28);
+  padding: 1.6rem 1.6rem 1.2rem;
+  text-align: center;
+}
+.welcome-icon {
+  font-size: 2.4rem;
+  line-height: 1;
+  margin-bottom: 0.4rem;
+}
+.welcome-card h2 {
+  margin: 0 0 0.5rem;
+  font-size: 1.3rem;
+}
+.welcome-card p {
+  margin: 0 auto;
+  max-width: 26rem;
+  line-height: 1.6;
+  color: var(--text);
+}
+.welcome-dots {
+  display: flex;
+  justify-content: center;
+  gap: 0.4rem;
+  margin: 1.1rem 0;
+}
+.welcome-dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: var(--border);
+}
+.welcome-dot.active {
+  background: var(--accent);
+}
+.welcome-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+.welcome-nav {
+  display: flex;
+  gap: 0.5rem;
+}
+
 /* Brain dump */
 .braindump-text {
   min-height: 50vh;

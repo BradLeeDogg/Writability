@@ -29,6 +29,17 @@ const PROBE = `(async () => {
   await waitFor('#root', 'react root');
   if (!q('#root').children.length) throw new Error('renderer mounted but #root is empty');
 
+  // First-run welcome guide: step through it and confirm it closes.
+  await waitFor('[data-testid="welcome"]', 'welcome guide');
+  for (let i = 0; i < 3 && q('[data-testid="welcome-next"]'); i++) {
+    q('[data-testid="welcome-next"]').click();
+    await sleep(60);
+  }
+  (await waitFor('[data-testid="welcome-done"]', 'welcome done button')).click();
+  const wStart = Date.now();
+  while (q('[data-testid="welcome"]') && Date.now() - wStart < 3000) await sleep(50);
+  if (q('[data-testid="welcome"]')) throw new Error('welcome guide did not close');
+
   // Library view (no papers yet in the throwaway data dir).
   await waitFor('[data-testid="library"]', 'library view');
   (await waitFor('[data-testid="new-paper"]', 'new paper button')).click();
@@ -98,6 +109,10 @@ const PROBE = `(async () => {
 
   (await waitFor('[data-testid="tab-settings"]', 'settings tab')).click();
   await waitFor('[data-testid="settings-panel"]', 'settings panel');
+
+  // Backup controls are present in Settings.
+  await waitFor('[data-testid="backup-create"]', 'backup button');
+  await waitFor('[data-testid="backup-restore"]', 'restore button');
 
   // Calm & comprehension: underline academic terms, then spotlight the paragraph.
   (await waitFor('[data-testid="toggle-define"]', 'define-terms toggle')).click();

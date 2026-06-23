@@ -5,6 +5,7 @@ import { writeJsonAtomic, readJson } from './services/atomic'
 import { createPaper, deletePaper, listPapers, openPaper, savePaper } from './services/papers'
 import { getSettings, saveSettings } from './services/settings'
 import { renderExport } from './services/export'
+import { applyBundle, buildBundle } from './services/backup'
 import { dataDir } from './services/paths'
 import { analyzeClarity, suggestSentenceSplit } from '@shared/clarity'
 import { decodeAssignment } from '@shared/assignment'
@@ -283,6 +284,35 @@ export async function runSelftest(): Promise<void> {
     const txtBytes = await renderExport(reopened!, 'txt')
     assert.ok(txtBytes.toString('utf8').includes('Hello world'), 'txt export has prose')
     pass('export (docx + txt)')
+
+    // --- backup round-trip ----------------------------------------------
+    const bkPaper = createPaper({ title: 'Backup me', essayType: 'reflection' })
+    savePaper({
+      meta: bkPaper.meta,
+      content: { ...bkPaper.content, scratch: 'remember this exact note' }
+    })
+    const bundle = buildBundle()
+    assert.ok(bundle.app === 'writability' && bundle.version >= 1, 'bundle is tagged')
+    assert.ok(bundle.papers.some((p) => p.meta.id === bkPaper.meta.id), 'bundle contains the paper')
+    deletePaper(bkPaper.meta.id)
+    assert.equal(openPaper(bkPaper.meta.id), null, 'paper is gone before restore')
+    const importedCount = applyBundle(bundle)
+    assert.ok(importedCount >= 1, 'applyBundle reports how many it restored')
+    const restored = openPaper(bkPaper.meta.id)
+    assert.ok(restored, 'paper comes back from the bundle')
+    assert.equal(
+      restored!.content.scratch,
+      'remember this exact note',
+      'restored content matches exactly'
+    )
+    assert.equal(
+      restored!.meta.createdAt,
+      bkPaper.meta.createdAt,
+      'restore preserves the original timestamps'
+    )
+    assert.throws(() => applyBundle({} as never), 'a non-backup object is rejected')
+    deletePaper(bkPaper.meta.id)
+    pass('backup round-trip')
 
     // --- cleanup --------------------------------------------------------
     deletePaper(paper.meta.id)

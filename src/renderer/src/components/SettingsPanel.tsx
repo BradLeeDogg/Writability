@@ -26,6 +26,32 @@ const OVERLAYS: { value: OverlayTint; label: string }[] = [
 export function SettingsPanel(): JSX.Element {
   const settings = useStore((s) => s.settings)
   const update = useStore((s) => s.updateSettings)
+  const createBackup = useStore((s) => s.createBackup)
+  const restoreBackup = useStore((s) => s.restoreBackup)
+  const replayWelcome = useStore((s) => s.replayWelcome)
+
+  const onBackup = async (): Promise<void> => {
+    const res = await createBackup()
+    if (res.ok) {
+      alert(`Saved a backup of ${res.count} paper${res.count === 1 ? '' : 's'}.`)
+    } else if (!res.canceled) {
+      alert('Could not save the backup: ' + (res.error ?? 'unknown error'))
+    }
+  }
+
+  const onRestore = async (): Promise<void> => {
+    const ok = confirm(
+      'Restore from a backup?\n\nThis brings back the papers saved in the file. ' +
+        'Any paper you already have with the same id will be replaced by the saved copy.'
+    )
+    if (!ok) return
+    const res = await restoreBackup()
+    if (res.ok) {
+      alert(`Brought back ${res.imported} paper${res.imported === 1 ? '' : 's'}.`)
+    } else if (!res.canceled) {
+      alert('Could not restore: ' + (res.error ?? 'unknown error'))
+    }
+  }
 
   const applyDyslexiaPreset = (): void =>
     update({
@@ -179,6 +205,23 @@ export function SettingsPanel(): JSX.Element {
         format={(v) => `${v.toFixed(1)}×`}
         onChange={(v) => update({ ttsRate: v })}
       />
+
+      <fieldset className="setting">
+        <legend>Your work</legend>
+        <p className="muted">
+          Your papers are saved on this computer. A backup keeps a copy somewhere of your own — a
+          USB stick, a cloud folder — that you can restore from later.
+        </p>
+        <button className="ghost block" data-testid="backup-create" onClick={onBackup}>
+          💾 Back up my papers…
+        </button>
+        <button className="ghost block" data-testid="backup-restore" onClick={onRestore}>
+          ↩ Restore from a backup…
+        </button>
+        <button className="ghost block" onClick={replayWelcome}>
+          Show the welcome guide again
+        </button>
+      </fieldset>
     </div>
   )
 }

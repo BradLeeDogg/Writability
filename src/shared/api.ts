@@ -45,6 +45,24 @@ export interface ExportResult {
   error?: string
 }
 
+export interface BackupResult {
+  ok: boolean
+  /** Where the backup was written. */
+  path?: string
+  /** How many papers were saved. */
+  count?: number
+  canceled?: boolean
+  error?: string
+}
+
+export interface RestoreResult {
+  ok: boolean
+  /** How many papers were brought back. */
+  imported?: number
+  canceled?: boolean
+  error?: string
+}
+
 export interface AppInfo {
   version: string
   dataDir: string
@@ -66,6 +84,12 @@ export interface WritabilityApi {
 
   // Export ----------------------------------------------------------------
   exportPaper(input: ExportInput): Promise<ExportResult>
+
+  // Backup ----------------------------------------------------------------
+  /** Write every paper + settings to a single backup file the student chooses. */
+  createBackup(): Promise<BackupResult>
+  /** Read a backup file and bring its papers (and settings) back. */
+  restoreBackup(): Promise<RestoreResult>
 
   // Misc ------------------------------------------------------------------
   getAppInfo(): Promise<AppInfo>

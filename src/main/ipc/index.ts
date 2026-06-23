@@ -2,6 +2,7 @@ import { app, ipcMain } from 'electron'
 import * as papers from '../services/papers'
 import * as settings from '../services/settings'
 import { exportPaper } from '../services/export'
+import { createBackup, restoreBackup } from '../services/backup'
 import { dataDir } from '../services/paths'
 import type { CreatePaperInput, ExportInput, SavePaperInput } from '@shared/api'
 import type { AppSettings } from '@shared/types'
@@ -22,6 +23,10 @@ export function registerIpc(): void {
 
   // Export ----------------------------------------------------------------
   ipcMain.handle('export:paper', (_e, input: ExportInput) => exportPaper(input))
+
+  // Backup ----------------------------------------------------------------
+  ipcMain.handle('backup:create', () => createBackup())
+  ipcMain.handle('backup:restore', () => restoreBackup())
 
   // Misc ------------------------------------------------------------------
   ipcMain.handle('app:info', () => ({

@@ -5,6 +5,7 @@ import { Toolbar } from './components/Toolbar'
 import { OutlinePanel } from './components/OutlinePanel'
 import { Editor } from './components/Editor'
 import { ToolsPanel } from './components/ToolsPanel'
+import { Welcome } from './components/Welcome'
 
 export default function App(): JSX.Element {
   const ready = useStore((s) => s.ready)
@@ -13,6 +14,7 @@ export default function App(): JSX.Element {
   const init = useStore((s) => s.init)
   const save = useStore((s) => s.save)
   const focusMode = useStore((s) => s.settings.focusMode)
+  const onboarded = useStore((s) => s.settings.onboarded)
   const outlineOpen = useStore((s) => s.outlineOpen)
   const toolsOpen = useStore((s) => s.toolsOpen)
 
@@ -40,9 +42,12 @@ export default function App(): JSX.Element {
     )
   }
 
+  const showWelcome = !onboarded
+
   if (view === 'library' || !current) {
     return (
       <div className="app" data-testid="app">
+        {showWelcome && <Welcome />}
         <Library />
       </div>
     )
@@ -50,6 +55,7 @@ export default function App(): JSX.Element {
 
   return (
     <div className="app" data-testid="app">
+      {showWelcome && <Welcome />}
       <Toolbar />
       <main className="workspace" data-focus={String(focusMode)}>
         {!focusMode && outlineOpen && <OutlinePanel />}

@@ -15,6 +15,9 @@ const api: WritabilityApi = {
 
   exportPaper: (input) => ipcRenderer.invoke('export:paper', input),
 
+  createBackup: () => ipcRenderer.invoke('backup:create'),
+  restoreBackup: () => ipcRenderer.invoke('backup:restore'),
+
   getAppInfo: () => ipcRenderer.invoke('app:info')
 }
 
