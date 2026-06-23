@@ -698,6 +698,21 @@ fieldset.field {
 .prose:focus {
   outline: none;
 }
+
+/* Spotlight (typewriter) focus: dim every block but the active one. */
+.editor-surface.spotlight .prose > * {
+  opacity: 0.32;
+  transition: opacity 0.2s ease;
+}
+.editor-surface.spotlight .prose .pm-spotlight {
+  opacity: 1;
+}
+
+/* Hover-to-define academic terms. */
+.pm-glossary {
+  border-bottom: 1px dashed var(--accent);
+  cursor: help;
+}
 .prose p {
   margin: 0 0 var(--para-spacing);
 }

@@ -144,6 +144,26 @@ export function SettingsPanel(): JSX.Element {
       <label className="toggle">
         <input
           type="checkbox"
+          data-testid="toggle-spotlight"
+          checked={settings.spotlightMode}
+          onChange={(e) => update({ spotlightMode: e.target.checked })}
+        />
+        <span>Spotlight the current paragraph (dim the rest)</span>
+      </label>
+
+      <label className="toggle">
+        <input
+          type="checkbox"
+          data-testid="toggle-define"
+          checked={settings.defineTerms}
+          onChange={(e) => update({ defineTerms: e.target.checked })}
+        />
+        <span>Underline academic terms (hover to see a meaning)</span>
+      </label>
+
+      <label className="toggle">
+        <input
+          type="checkbox"
           checked={settings.reduceMotion}
           onChange={(e) => update({ reduceMotion: e.target.checked })}
         />

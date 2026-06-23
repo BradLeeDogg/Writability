@@ -91,6 +91,12 @@ const PROBE = `(async () => {
   (await waitFor('[data-testid="tab-settings"]', 'settings tab')).click();
   await waitFor('[data-testid="settings-panel"]', 'settings panel');
 
+  // Calm & comprehension: underline academic terms, then spotlight the paragraph.
+  (await waitFor('[data-testid="toggle-define"]', 'define-terms toggle')).click();
+  await waitFor('.prose .pm-glossary', 'academic terms underlined in the prose');
+  (await waitFor('[data-testid="toggle-spotlight"]', 'spotlight toggle')).click();
+  await waitFor('.editor-surface.spotlight', 'spotlight mode applied');
+
   // Toggle a setting to exercise the live theming path.
   const themeBtn = q('[data-testid="theme-calm-dark"]');
   if (themeBtn) themeBtn.click();

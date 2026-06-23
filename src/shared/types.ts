@@ -115,6 +115,10 @@ export interface AppSettings {
   maxLineWidth: number
   /** Distraction-reduced focus mode. */
   focusMode: boolean
+  /** Spotlight the current paragraph and dim the rest (typewriter focus). */
+  spotlightMode: boolean
+  /** Underline known academic terms with a hover-to-define tooltip. */
+  defineTerms: boolean
   /** Preferred length of a focus-timer work session, in minutes. */
   focusTimerMinutes: number
   /** Respect/force reduced motion. */
@@ -138,6 +142,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   paragraphSpacing: 0.8,
   maxLineWidth: 68,
   focusMode: false,
+  spotlightMode: false,
+  defineTerms: false,
   focusTimerMinutes: 25,
   reduceMotion: false,
   overlayTint: 'none',

@@ -10,6 +10,7 @@ import { analyzeClarity, suggestSentenceSplit } from '@shared/clarity'
 import { decodeAssignment } from '@shared/assignment'
 import { outlineToDocContent } from '@shared/scaffold'
 import { TRANSITIONS } from '@shared/transitions'
+import { GLOSSARY, glossaryMap } from '@shared/glossary'
 import { formatCitation } from '@shared/citations'
 import { docToPlainText } from '@shared/doc'
 import {
@@ -221,6 +222,14 @@ export async function runSelftest(): Promise<void> {
       'transition groups all have phrases'
     )
     pass('drafting bridge (scaffold + split + transitions)')
+
+    // --- comprehension glossary -----------------------------------------
+    assert.ok(
+      GLOSSARY.length >= 10 && GLOSSARY.every((g) => g.term && g.definition),
+      'glossary is populated with terms and definitions'
+    )
+    assert.ok((glossaryMap().get('thesis') ?? '').length > 0, 'glossary lookup resolves "thesis"')
+    pass('comprehension glossary')
 
     // --- citations ------------------------------------------------------
     const mla = formatCitation(

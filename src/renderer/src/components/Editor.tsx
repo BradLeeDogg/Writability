@@ -6,6 +6,7 @@ import Placeholder from '@tiptap/extension-placeholder'
 import CharacterCount from '@tiptap/extension-character-count'
 import { useStore } from '../store/useStore'
 import { ThesisPin } from './ThesisPin'
+import { Spotlight, spotlightKey, Glossary, glossaryKey } from '../lib/tiptapAddons'
 import { outlineToDocContent } from '@shared/scaffold'
 import { TRANSITIONS } from '@shared/transitions'
 
@@ -13,6 +14,8 @@ export function Editor(): JSX.Element {
   // App only mounts the Editor when a paper is open.
   const current = useStore((s) => s.current)!
   const setDoc = useStore((s) => s.setDoc)
+  const spotlightMode = useStore((s) => s.settings.spotlightMode)
+  const defineTerms = useStore((s) => s.settings.defineTerms)
 
   const editor = useEditor({
     extensions: [
@@ -20,7 +23,9 @@ export function Editor(): JSX.Element {
       Placeholder.configure({
         placeholder: 'Start writing here. You can begin anywhere — the outline is here to help.'
       }),
-      CharacterCount
+      CharacterCount,
+      Spotlight,
+      Glossary
     ],
     content: current.content.doc as never,
     autofocus: 'end',
@@ -46,6 +51,14 @@ export function Editor(): JSX.Element {
     }
   }, [editor])
 
+  // Flip the spotlight / glossary plugins on or off when their settings change.
+  useEffect(() => {
+    if (editor) editor.view.dispatch(editor.state.tr.setMeta(spotlightKey, spotlightMode))
+  }, [editor, spotlightMode])
+  useEffect(() => {
+    if (editor) editor.view.dispatch(editor.state.tr.setMeta(glossaryKey, defineTerms))
+  }, [editor, defineTerms])
+
   const words = editor?.storage.characterCount.words() ?? 0
   const goal = current.meta.wordGoal
 
@@ -61,7 +74,10 @@ export function Editor(): JSX.Element {
       <ThesisPin />
       <FormatBar editor={editor} onInsertOutline={insertOutline} />
       <div className="editor-scroll">
-        <EditorContent editor={editor} className="editor-surface" />
+        <EditorContent
+          editor={editor}
+          className={'editor-surface' + (spotlightMode ? ' spotlight' : '')}
+        />
       </div>
       <footer className="editor-status" aria-live="polite">
         <span>
