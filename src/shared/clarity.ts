@@ -65,6 +65,62 @@ function firstWords(sentence: string, n = 12): string {
   return parts.length <= n ? sentence : parts.slice(0, n).join(' ') + '…'
 }
 
+const SPLIT_CONNECTORS = [' and ', ' but ', ' so ', ' yet ', ' or ']
+
+interface SplitPoint {
+  index: number
+  skip: number
+}
+
+function capitalize(s: string): string {
+  const t = s.trim()
+  return t ? t[0].toUpperCase() + t.slice(1) : t
+}
+
+/**
+ * Suggest a way to break a long sentence in two. Prefers a coordinating
+ * conjunction near the middle (dropping it and starting a new sentence), then a
+ * comma near the middle. Returns null when no tidy split is obvious.
+ */
+export function suggestSentenceSplit(sentence: string): string | null {
+  const clean = sentence.trim().replace(/\s+/g, ' ')
+  const words = clean.split(' ')
+  if (words.length < 12) return null
+  const mid = clean.length / 2
+
+  const collect = (needle: string, skip: number): SplitPoint[] => {
+    const res: SplitPoint[] = []
+    let from = 0
+    for (;;) {
+      const i = clean.indexOf(needle, from)
+      if (i === -1) break
+      if (i > 0 && i < clean.length - 1) res.push({ index: i, skip })
+      from = i + needle.length
+    }
+    return res
+  }
+  const nearestToMid = (points: SplitPoint[]): SplitPoint | null =>
+    points.reduce<SplitPoint | null>(
+      (b, p) => (!b || Math.abs(p.index - mid) < Math.abs(b.index - mid) ? p : b),
+      null
+    )
+
+  // Prefer a coordinating conjunction near the middle; otherwise fall back to a comma.
+  let best = nearestToMid(SPLIT_CONNECTORS.flatMap((conn) => collect(conn, conn.length)))
+  if (!best || Math.abs(best.index - mid) > clean.length * 0.3) {
+    const comma = nearestToMid(collect(', ', 2))
+    if (comma && (!best || Math.abs(comma.index - mid) < Math.abs(best.index - mid))) best = comma
+  }
+  if (!best) return null
+
+  const left = clean.slice(0, best.index).trim().replace(/[,;:]$/, '')
+  const right = clean.slice(best.index + best.skip).trim()
+  if (left.split(' ').length < 3 || right.split(' ').length < 3) return null
+
+  const first = /[.!?]$/.test(left) ? left : left + '.'
+  return `${first} ${capitalize(right)}`
+}
+
 function readingLabelFor(grade: number): string {
   if (grade <= 6) return 'Around grade 6 or below — very easy to read.'
   if (grade <= 9) return `Around grade ${Math.round(grade)} — clear for most readers.`
@@ -104,11 +160,13 @@ export function analyzeClarity(text: string): ClarityReport {
     const sWords = wordsIn(sentence)
 
     if (sWords.length > LONG_SENTENCE_WORDS) {
+      const split = suggestSentenceSplit(sentence)
       add({
         type: 'long-sentence',
         message: `This sentence is ${sWords.length} words long. Long sentences are harder to follow.`,
-        suggestion: 'Try splitting it into two shorter sentences.',
-        excerpt: firstWords(sentence)
+        suggestion: split ? 'One way to split it:' : 'Try splitting it into two shorter sentences.',
+        excerpt: firstWords(sentence),
+        rewrite: split ?? undefined
       })
     }
 

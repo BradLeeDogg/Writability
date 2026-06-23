@@ -197,6 +197,8 @@ export interface ClarityIssue {
   suggestion?: string
   /** The text this issue refers to. */
   excerpt: string
+  /** An optional ready-made rewrite (e.g. a long sentence split in two). */
+  rewrite?: string
 }
 
 export interface ClarityReport {

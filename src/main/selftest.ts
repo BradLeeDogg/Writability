@@ -6,8 +6,10 @@ import { createPaper, deletePaper, listPapers, openPaper, savePaper } from './se
 import { getSettings, saveSettings } from './services/settings'
 import { renderExport } from './services/export'
 import { dataDir } from './services/paths'
-import { analyzeClarity } from '@shared/clarity'
+import { analyzeClarity, suggestSentenceSplit } from '@shared/clarity'
 import { decodeAssignment } from '@shared/assignment'
+import { outlineToDocContent } from '@shared/scaffold'
+import { TRANSITIONS } from '@shared/transitions'
 import { formatCitation } from '@shared/citations'
 import { docToPlainText } from '@shared/doc'
 import {
@@ -192,6 +194,33 @@ export async function runSelftest(): Promise<void> {
     assert.ok(decoded.requirements.some((r) => /MLA/.test(r)), 'decoder finds citation style')
     assert.ok(decoded.requirements.some((r) => /thesis statement/i.test(r)), 'decoder finds thesis requirement')
     pass('assignment decoder')
+
+    // --- drafting bridge: scaffold + sentence split + transitions -------
+    const scaffold = outlineToDocContent(makeOutline('argument'))
+    assert.ok(
+      scaffold.some((n) => n.type === 'heading' && n.attrs?.level === 2),
+      'scaffold turns outline steps into H2 headings'
+    )
+    assert.ok(scaffold.some((n) => n.type === 'blockquote'), 'scaffold includes guide blockquotes')
+    const withNotes = makeOutline('argument')
+    withNotes[0].text = 'My working thesis note'
+    assert.ok(
+      JSON.stringify(outlineToDocContent(withNotes)).includes('My working thesis note'),
+      'scaffold carries outline notes into the prose'
+    )
+
+    const split = suggestSentenceSplit(
+      'Recycling reduces the amount of waste that cities send to landfill and it also saves a ' +
+        'great deal of energy for the whole community over time.'
+    )
+    assert.ok(split && /\.\s+[A-Z]/.test(split), 'long sentence split produces two sentences')
+    assert.equal(suggestSentenceSplit('This is short.'), null, 'short sentences are not split')
+
+    assert.ok(
+      TRANSITIONS.length >= 4 && TRANSITIONS.every((g) => g.phrases.length > 0),
+      'transition groups all have phrases'
+    )
+    pass('drafting bridge (scaffold + split + transitions)')
 
     // --- citations ------------------------------------------------------
     const mla = formatCitation(

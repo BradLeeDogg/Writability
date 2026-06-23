@@ -361,6 +361,44 @@ fieldset.field {
   width: 100%;
 }
 
+/* Linking-words menu (in the editor format bar) */
+.linking-menu {
+  position: relative;
+}
+.linking-menu > summary {
+  list-style: none;
+}
+.linking-menu > summary::-webkit-details-marker {
+  display: none;
+}
+.linking-body {
+  right: auto;
+  left: 0;
+  width: 290px;
+  max-height: 60vh;
+  overflow-y: auto;
+  gap: 0.7rem;
+}
+.linking-label {
+  margin: 0 0 0.3rem;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+.linking-phrases {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+.linking-phrases .chip {
+  width: auto;
+  font-size: 0.82rem;
+  padding: 0.25rem 0.55rem;
+}
+.insert-outline {
+  margin-left: 0.25rem;
+}
+
 /* --- Workspace grid ------------------------------------------------------- */
 .workspace {
   flex: 1;
@@ -781,6 +819,15 @@ fieldset.field {
   margin: 0.2rem 0 0;
   font-size: 0.84rem;
   color: var(--accent);
+}
+.issue-rewrite {
+  margin: 0.25rem 0 0;
+  font-size: 0.86rem;
+  background: var(--surface-2);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius-sm);
+  padding: 0.35rem 0.5rem;
+  white-space: pre-wrap;
 }
 .issue-excerpt {
   margin: 0.2rem 0 0;

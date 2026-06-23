@@ -62,6 +62,14 @@ const PROBE = `(async () => {
   await sleep(60);
   q('[data-testid="timer-toggle"]').click();
 
+  // Drafting bridge: insert the outline into the document as real headings.
+  (await waitFor('[data-testid="insert-outline"]', 'insert outline button')).click();
+  await waitFor('.prose h2', 'outline headings inserted into the document');
+
+  // Linking-words menu inserts a phrase at the cursor.
+  (await waitFor('[data-testid="linking-words"]', 'linking words menu')).click();
+  (await waitFor('[data-testid="transition-phrase"]', 'a transition phrase')).click();
+
   // Assignment decoder (the default tools tab): decode a prompt into a checklist.
   await waitFor('[data-testid="assignment-panel"]', 'assignment panel');
   const prompt = await waitFor('[data-testid="assignment-prompt"]', 'assignment prompt');

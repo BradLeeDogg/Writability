@@ -6,6 +6,8 @@ import Placeholder from '@tiptap/extension-placeholder'
 import CharacterCount from '@tiptap/extension-character-count'
 import { useStore } from '../store/useStore'
 import { ThesisPin } from './ThesisPin'
+import { outlineToDocContent } from '@shared/scaffold'
+import { TRANSITIONS } from '@shared/transitions'
 
 export function Editor(): JSX.Element {
   // App only mounts the Editor when a paper is open.
@@ -47,10 +49,17 @@ export function Editor(): JSX.Element {
   const words = editor?.storage.characterCount.words() ?? 0
   const goal = current.meta.wordGoal
 
+  const insertOutline = (): void => {
+    if (!editor) return
+    const content = outlineToDocContent(current.content.outline)
+    if (!content.length) return
+    editor.chain().focus().insertContentAt(editor.state.doc.content.size, content).run()
+  }
+
   return (
     <section className="editor-wrap" data-testid="editor" aria-label="Writing area">
       <ThesisPin />
-      <FormatBar editor={editor} />
+      <FormatBar editor={editor} onInsertOutline={insertOutline} />
       <div className="editor-scroll">
         <EditorContent editor={editor} className="editor-surface" />
       </div>
@@ -66,10 +75,15 @@ export function Editor(): JSX.Element {
 
 interface FormatBarProps {
   editor: TiptapEditor | null
+  onInsertOutline: () => void
 }
 
-function FormatBar({ editor }: FormatBarProps): JSX.Element | null {
+function FormatBar({ editor, onInsertOutline }: FormatBarProps): JSX.Element | null {
   if (!editor) return null
+
+  const insertPhrase = (phrase: string): void => {
+    editor.chain().focus().insertContent(phrase + ' ').run()
+  }
   const btn = (
     label: string,
     title: string,
@@ -110,6 +124,47 @@ function FormatBar({ editor }: FormatBarProps): JSX.Element | null {
       {btn('❝', 'Quote', editor.isActive('blockquote'), () =>
         editor.chain().focus().toggleBlockquote().run()
       )}
+
+      <span className="fmt-sep" aria-hidden="true" />
+
+      <details className="menu linking-menu">
+        <summary className="fmt" data-testid="linking-words" aria-label="Insert a linking word">
+          Linking words ▾
+        </summary>
+        <div className="menu-body linking-body" role="menu">
+          {TRANSITIONS.map((group) => (
+            <div className="linking-group" key={group.label}>
+              <p className="linking-label">{group.label}</p>
+              <div className="linking-phrases">
+                {group.phrases.map((p) => (
+                  <button
+                    key={p}
+                    type="button"
+                    role="menuitem"
+                    className="chip"
+                    data-testid="transition-phrase"
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => insertPhrase(p)}
+                  >
+                    {p}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </details>
+
+      <button
+        type="button"
+        className="fmt insert-outline"
+        data-testid="insert-outline"
+        title="Insert your outline into the paper as headings"
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={onInsertOutline}
+      >
+        ⤓ Insert outline
+      </button>
     </div>
   )
 }

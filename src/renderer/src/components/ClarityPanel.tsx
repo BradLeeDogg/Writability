@@ -72,6 +72,7 @@ export function ClarityPanel(): JSX.Element {
                   <li key={i} className="issue">
                     <p className="issue-msg">{issue.message}</p>
                     {issue.suggestion && <p className="issue-fix">{issue.suggestion}</p>}
+                    {issue.rewrite && <p className="issue-rewrite">{issue.rewrite}</p>}
                     {issue.excerpt && <p className="issue-excerpt">“{issue.excerpt}”</p>}
                   </li>
                 ))}
