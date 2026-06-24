@@ -125,6 +125,7 @@ export async function runSelftest(): Promise<void> {
       requirements: [{ id: 'req-1', text: 'Write 500 words', done: false, source: 'auto' }]
     }
     paper.content.scratch = 'messy half-formed notes that should survive a reload'
+    paper.content.cards = [{ id: 'card-1', text: 'A board idea', x: 40, y: 60, color: 'blue' }]
     paper.meta.dueDate = '2026-12-01'
     paper.content.sources.push({
       id: 'src-1',
@@ -148,6 +149,10 @@ export async function runSelftest(): Promise<void> {
     assert.equal(reopened!.content.assignment.requirements.length, 1)
     assert.equal(reopened!.content.assignment.requirements[0].text, 'Write 500 words')
     assert.equal(reopened!.content.scratch, 'messy half-formed notes that should survive a reload')
+    assert.equal(reopened!.content.cards.length, 1, 'board cards persist')
+    assert.equal(reopened!.content.cards[0].text, 'A board idea')
+    assert.equal(reopened!.content.cards[0].color, 'blue')
+    assert.equal(reopened!.content.cards[0].x, 40)
     assert.equal(reopened!.meta.dueDate, '2026-12-01')
     assert.ok(docToPlainText(reopened!.content.doc).includes('Hello world'))
     pass('paper persistence (sqlite + sidecar)')

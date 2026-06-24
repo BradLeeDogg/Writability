@@ -5,6 +5,7 @@ import { Toolbar } from './components/Toolbar'
 import { OutlinePanel } from './components/OutlinePanel'
 import { Editor } from './components/Editor'
 import { ToolsPanel } from './components/ToolsPanel'
+import { Board } from './components/Board'
 import { Welcome } from './components/Welcome'
 
 export default function App(): JSX.Element {
@@ -17,6 +18,7 @@ export default function App(): JSX.Element {
   const onboarded = useStore((s) => s.settings.onboarded)
   const outlineOpen = useStore((s) => s.outlineOpen)
   const toolsOpen = useStore((s) => s.toolsOpen)
+  const boardOpen = useStore((s) => s.boardOpen)
 
   useEffect(() => {
     void init()
@@ -57,11 +59,15 @@ export default function App(): JSX.Element {
     <div className="app" data-testid="app">
       {showWelcome && <Welcome />}
       <Toolbar />
-      <main className="workspace" data-focus={String(focusMode)}>
-        {!focusMode && outlineOpen && <OutlinePanel />}
-        <Editor key={current.meta.id} />
-        {!focusMode && toolsOpen && <ToolsPanel />}
-      </main>
+      {boardOpen ? (
+        <Board />
+      ) : (
+        <main className="workspace" data-focus={String(focusMode)}>
+          {!focusMode && outlineOpen && <OutlinePanel />}
+          <Editor key={current.meta.id} />
+          {!focusMode && toolsOpen && <ToolsPanel />}
+        </main>
+      )}
     </div>
   )
 }

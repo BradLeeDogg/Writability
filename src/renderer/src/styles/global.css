@@ -639,6 +639,127 @@ fieldset.field {
   gap: 0.5rem;
 }
 
+/* Visual planning board (corkboard) */
+.board {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.board-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  padding: 0.55rem 1rem;
+  border-bottom: 1px solid var(--border);
+}
+.board-ai {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.board-ai-input {
+  width: 15rem;
+  max-width: 38vw;
+}
+.board-hint {
+  margin-left: auto;
+  font-size: 0.85rem;
+}
+.board-canvas {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  background-color: var(--surface-2);
+  background-image: radial-gradient(var(--border) 1px, transparent 1px);
+  background-size: 22px 22px;
+}
+.board-empty {
+  position: absolute;
+  top: 2.5rem;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: 28rem;
+  text-align: center;
+}
+.card {
+  position: absolute;
+  width: 172px;
+  min-height: 92px;
+  display: flex;
+  flex-direction: column;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  color: #1b1b1b;
+}
+.card-yellow {
+  background: #fdf3b8;
+}
+.card-blue {
+  background: #cfe6fb;
+}
+.card-green {
+  background: #d4f0cf;
+}
+.card-pink {
+  background: #fbd5e6;
+}
+.card-handle {
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 2px;
+  padding: 2px 5px;
+  cursor: grab;
+  touch-action: none;
+}
+.card-handle:active {
+  cursor: grabbing;
+}
+.card-color,
+.card-remove {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  line-height: 1;
+  padding: 0 2px;
+  color: rgba(0, 0, 0, 0.45);
+}
+.card-remove {
+  font-size: 1.1rem;
+}
+.card-text {
+  flex: 1;
+  border: none;
+  background: transparent;
+  resize: none;
+  padding: 0 0.5rem 0.4rem;
+  font: inherit;
+  font-size: 0.9rem;
+  line-height: 1.4;
+  color: #1b1b1b;
+  min-height: 46px;
+}
+.card-text:focus {
+  outline: none;
+}
+.card-to-outline {
+  background: rgba(0, 0, 0, 0.05);
+  border: none;
+  border-top: 1px solid rgba(0, 0, 0, 0.08);
+  padding: 3px;
+  font-size: 0.75rem;
+  cursor: pointer;
+  color: rgba(0, 0, 0, 0.6);
+  border-radius: 0 0 8px 8px;
+}
+.card-to-outline:hover {
+  background: rgba(0, 0, 0, 0.1);
+}
+
 /* Opt-in AI helper */
 .ai-helper,
 .ai-helper-off {

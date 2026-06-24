@@ -1,12 +1,15 @@
 import { create } from 'zustand'
 import { applySettings } from '../lib/theme'
 import { decodeAssignment } from '@shared/assignment'
+import { splitIntoItems } from '@shared/ai'
 import { uid } from '@shared/ids'
 import { makeBodyParagraph, nextBodyParagraphNumber } from '@shared/outline-templates'
 import type { AiRunInput, AiRunResult, BackupResult, ExportResult, RestoreResult } from '@shared/api'
-import { DEFAULT_SETTINGS } from '@shared/types'
+import { CARD_COLORS, DEFAULT_SETTINGS } from '@shared/types'
 import type {
   AppSettings,
+  Card,
+  CardColor,
   CitationSource,
   EssayType,
   ExportFormat,
@@ -32,6 +35,8 @@ interface StoreState {
   outlineOpen: boolean
   toolsOpen: boolean
   toolsTab: ToolsTab
+  /** When true, the main area shows the visual planning board instead of the editor. */
+  boardOpen: boolean
 
   // lifecycle
   init: () => Promise<void>
@@ -54,7 +59,17 @@ interface StoreState {
   setOutlineText: (id: string, text: string) => void
   toggleOutlineDone: (id: string) => void
   addBodyParagraph: () => void
+  addOutlineNote: (text: string) => void
   removeOutlineNode: (id: string) => void
+
+  // planning board (cards)
+  addCard: (text?: string) => void
+  addCardsFromText: (text: string) => void
+  updateCardText: (id: string, text: string) => void
+  cycleCardColor: (id: string) => void
+  moveCard: (id: string, x: number, y: number) => void
+  removeCard: (id: string) => void
+  sendCardToOutline: (id: string) => void
   addSource: (source: CitationSource) => void
   updateSource: (id: string, patch: Partial<CitationSource>) => void
   removeSource: (id: string) => void
@@ -75,6 +90,7 @@ interface StoreState {
   toggleTools: () => void
   setToolsTab: (tab: ToolsTab) => void
   toggleFocus: () => void
+  toggleBoard: () => void
 
   // export
   exportCurrent: (format: ExportFormat) => Promise<ExportResult>
@@ -137,6 +153,7 @@ export const useStore = create<StoreState>()((set, get) => {
     outlineOpen: true,
     toolsOpen: true,
     toolsTab: 'assignment',
+    boardOpen: false,
 
     async init() {
       const [settings, papers] = await Promise.all([window.api.getSettings(), window.api.listPapers()])
@@ -235,12 +252,98 @@ export const useStore = create<StoreState>()((set, get) => {
       patchContent({ outline: next })
     },
 
+    addOutlineNote(text) {
+      const cur = get().current
+      const trimmed = text.trim()
+      if (!cur || !trimmed) return
+      const note: OutlineNode = {
+        id: uid('node'),
+        kind: 'note',
+        label: 'Note',
+        prompt: '',
+        text: trimmed,
+        done: false,
+        children: []
+      }
+      patchContent({ outline: [...cur.content.outline, note] })
+    },
+
     removeOutlineNode(id) {
       const cur = get().current
       if (!cur) return
       const prune = (list: OutlineNode[]): OutlineNode[] =>
         list.filter((n) => n.id !== id).map((n) => ({ ...n, children: prune(n.children) }))
       patchContent({ outline: prune(cur.content.outline) })
+    },
+
+    // --- planning board (cards) ----------------------------------------
+    addCard(text = '') {
+      const cur = get().current
+      if (!cur) return
+      const n = cur.content.cards.length
+      const card: Card = {
+        id: uid('card'),
+        text,
+        x: 28 + (n % 6) * 26,
+        y: 28 + (n % 6) * 26,
+        color: CARD_COLORS[n % CARD_COLORS.length]
+      }
+      patchContent({ cards: [...cur.content.cards, card] })
+    },
+
+    addCardsFromText(text) {
+      const cur = get().current
+      if (!cur) return
+      const items = splitIntoItems(text)
+      if (items.length === 0) return
+      const base = cur.content.cards.length
+      const newCards: Card[] = items.map((t, i) => ({
+        id: uid('card'),
+        text: t,
+        x: 24 + (i % 4) * 184,
+        y: 24 + Math.floor(i / 4) * 150 + (base > 0 ? 12 : 0),
+        color: CARD_COLORS[(base + i) % CARD_COLORS.length]
+      }))
+      patchContent({ cards: [...cur.content.cards, ...newCards] })
+    },
+
+    updateCardText(id, text) {
+      const cur = get().current
+      if (!cur) return
+      patchContent({ cards: cur.content.cards.map((c) => (c.id === id ? { ...c, text } : c)) })
+    },
+
+    cycleCardColor(id) {
+      const cur = get().current
+      if (!cur) return
+      patchContent({
+        cards: cur.content.cards.map((c) => {
+          if (c.id !== id) return c
+          const next = CARD_COLORS[(CARD_COLORS.indexOf(c.color) + 1) % CARD_COLORS.length]
+          return { ...c, color: next as CardColor }
+        })
+      })
+    },
+
+    moveCard(id, x, y) {
+      const cur = get().current
+      if (!cur) return
+      patchContent({
+        cards: cur.content.cards.map((c) => (c.id === id ? { ...c, x, y } : c))
+      })
+    },
+
+    removeCard(id) {
+      const cur = get().current
+      if (!cur) return
+      patchContent({ cards: cur.content.cards.filter((c) => c.id !== id) })
+    },
+
+    sendCardToOutline(id) {
+      const cur = get().current
+      if (!cur) return
+      const card = cur.content.cards.find((c) => c.id === id)
+      if (card) get().addOutlineNote(card.text)
     },
 
     addSource(source) {
@@ -359,6 +462,10 @@ export const useStore = create<StoreState>()((set, get) => {
 
     toggleFocus() {
       get().updateSettings({ focusMode: !get().settings.focusMode })
+    },
+
+    toggleBoard() {
+      set((s) => ({ boardOpen: !s.boardOpen }))
     },
 
     async exportCurrent(format) {

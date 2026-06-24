@@ -23,6 +23,8 @@ export function Toolbar(): JSX.Element {
   const toggleFocus = useStore((s) => s.toggleFocus)
   const toggleOutline = useStore((s) => s.toggleOutline)
   const toggleTools = useStore((s) => s.toggleTools)
+  const boardOpen = useStore((s) => s.boardOpen)
+  const toggleBoard = useStore((s) => s.toggleBoard)
   const exportCurrent = useStore((s) => s.exportCurrent)
 
   const [speaking, setSpeaking] = useState(false)
@@ -71,6 +73,16 @@ export function Toolbar(): JSX.Element {
       </div>
 
       <div className="toolbar-right">
+        <button
+          className={'ghost' + (boardOpen ? ' active' : '')}
+          data-testid="board-toggle"
+          aria-pressed={boardOpen}
+          onClick={toggleBoard}
+          title="Visual planning board"
+        >
+          {boardOpen ? '✍ Write' : '🧩 Board'}
+        </button>
+
         <FocusTimer />
 
         {ttsSupported() && (

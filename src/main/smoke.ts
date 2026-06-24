@@ -144,6 +144,14 @@ const PROBE = `(async () => {
   (await waitFor('[data-testid="tab-clarity"]', 'clarity tab (configured)')).click();
   await waitFor('[data-testid="ai-helper"]', 'AI helper appears once a key is set');
 
+  // Visual planning board: toggle in, add a card, then return to writing.
+  (await waitFor('[data-testid="board-toggle"]', 'board toggle')).click();
+  await waitFor('[data-testid="board"]', 'planning board');
+  (await waitFor('[data-testid="add-card"]', 'add card button')).click();
+  setValue(await waitFor('[data-testid="board-card"] .card-text', 'a card on the board'), 'a planned idea');
+  (await waitFor('[data-testid="board-toggle"]', 'board toggle back')).click();
+  await waitFor('[data-testid="editor"]', 'back to the editor');
+
   return 'WP_SMOKE_OK';
 })()`
 

@@ -5,6 +5,7 @@ import { paperDbPath } from './paths'
 import { emptyDoc } from '@shared/doc'
 import type {
   Assignment,
+  Card,
   CitationSource,
   OutlineKind,
   OutlineNode,
@@ -123,7 +124,12 @@ export function readContent(db: Database.Database): PaperContent {
     | undefined
   const scratch = scratchRow?.value ?? ''
 
-  return { doc, outline, sources, assignment, scratch }
+  const cardsRow = db.prepare(`SELECT value FROM meta WHERE key = 'cards'`).get() as
+    | { value: string }
+    | undefined
+  const cards = cardsRow?.value ? safeParse<Card[]>(cardsRow.value, []) : []
+
+  return { doc, outline, sources, assignment, scratch, cards }
 }
 
 export function writeContent(db: Database.Database, content: PaperContent): void {
@@ -136,6 +142,9 @@ export function writeContent(db: Database.Database, content: PaperContent): void
       JSON.stringify(c.assignment ?? EMPTY_ASSIGNMENT)
     )
     db.prepare(`INSERT OR REPLACE INTO meta (key, value) VALUES ('scratch', ?)`).run(c.scratch ?? '')
+    db.prepare(`INSERT OR REPLACE INTO meta (key, value) VALUES ('cards', ?)`).run(
+      JSON.stringify(c.cards ?? [])
+    )
 
     db.prepare('DELETE FROM outline_nodes').run()
     const insNode = db.prepare(`

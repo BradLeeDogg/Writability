@@ -64,6 +64,20 @@ export interface Assignment {
   requirements: RequirementItem[]
 }
 
+/** A sticky note on the visual planning board (corkboard). */
+export type CardColor = 'yellow' | 'blue' | 'green' | 'pink'
+
+export interface Card {
+  id: string
+  text: string
+  /** Position on the board canvas, in pixels from the top-left. */
+  x: number
+  y: number
+  color: CardColor
+}
+
+export const CARD_COLORS: CardColor[] = ['yellow', 'blue', 'green', 'pink']
+
 export interface PaperContent {
   /** TipTap / ProseMirror JSON document for the main prose. */
   doc: unknown
@@ -75,6 +89,8 @@ export interface PaperContent {
   assignment: Assignment
   /** Free, judgement-free "brain dump" scratch space (no clarity checks, no word count). */
   scratch: string
+  /** Sticky notes on the visual planning board. */
+  cards: Card[]
 }
 
 export interface Paper {
