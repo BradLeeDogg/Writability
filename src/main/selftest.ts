@@ -17,6 +17,7 @@ import { GLOSSARY, glossaryMap } from '@shared/glossary'
 import { summarizeSource } from '@shared/reading'
 import { formatCitation } from '@shared/citations'
 import { docToPlainText, splitSentences, sentenceIndexAt } from '@shared/doc'
+import { coachContext } from '@shared/coach'
 import {
   findThesisNode,
   insertNoteUnder,
@@ -388,6 +389,24 @@ export async function runSelftest(): Promise<void> {
     const unknown = insertNoteUnder(baseOutline, 'no-such-id', 'x')
     assert.equal(unknown.length, baseOutline.length + 1, 'unknown section falls back to top-level')
     pass('promote cards to outline sections')
+
+    // --- coach context: seed from the student's own work (pure) ---------
+    const ctxOutline = makeOutline('argument')
+    ctxOutline[0].text = 'Climate action is urgent.'
+    const cc = coachContext({
+      assignment: { prompt: 'Write about climate.', requirements: [] },
+      outline: ctxOutline,
+      cards: [
+        { id: 'c1', text: 'solar costs are falling', x: 0, y: 0, color: 'yellow' },
+        { id: 'c2', text: '   ', x: 0, y: 0, color: 'blue' }
+      ],
+      doc: { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'My first draft sentence.' }] }] }
+    })
+    assert.equal(cc.assignment, 'Write about climate.', 'assignment prompt gathered')
+    assert.equal(cc.thesis, 'Climate action is urgent.', 'thesis pulled from the outline')
+    assert.equal(cc.cards, 'solar costs are falling', 'blank cards are dropped from context')
+    assert.ok(cc.draft.includes('My first draft'), 'draft flattened from the doc')
+    pass('coach context (seed from own work)')
 
     // --- heuristic edge cases (robustness on empty / sparse input) ------
     assert.equal(analyzeClarity('').wordCount, 0, 'empty text has zero words')

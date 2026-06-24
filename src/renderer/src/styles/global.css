@@ -932,6 +932,29 @@ fieldset.field {
 .ai-input {
   margin-bottom: 0.5rem;
 }
+.coach-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+  margin: 0.2rem 0 0.5rem;
+}
+.coach-chips-label {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+.chip {
+  font-size: 0.78rem;
+  padding: 2px 9px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--accent);
+  cursor: pointer;
+}
+.chip:hover {
+  background: var(--surface-2);
+}
 .ai-actions {
   display: flex;
   flex-wrap: wrap;

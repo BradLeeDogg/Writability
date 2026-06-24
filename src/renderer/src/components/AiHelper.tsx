@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useStore } from '../store/useStore'
 import type { AiTask } from '@shared/ai'
+import { coachContext } from '@shared/coach'
 
 const TASK_LABELS: Record<AiTask, string> = {
   brainstorm: '💡 Brainstorm ideas',
@@ -8,17 +9,32 @@ const TASK_LABELS: Record<AiTask, string> = {
   feedback: '💬 Give me feedback'
 }
 
+const CHIPS: { key: keyof ReturnType<typeof coachContext>; label: string }[] = [
+  { key: 'assignment', label: 'my assignment' },
+  { key: 'thesis', label: 'my thesis' },
+  { key: 'cards', label: 'my board ideas' },
+  { key: 'draft', label: 'my draft' }
+]
+
 // Opt-in AI *coaching*, shown only when the student has added their own key.
 // It helps them brainstorm, plan, and reflect — it never writes for them.
 export function AiHelper(): JSX.Element {
   const aiKey = useStore((s) => s.settings.aiApiKey)
   const runAi = useStore((s) => s.runAi)
+  const current = useStore((s) => s.current)
   const [text, setText] = useState('')
   const [busy, setBusy] = useState<AiTask | null>(null)
   const [result, setResult] = useState('')
   const [error, setError] = useState('')
 
   const configured = !!(aiKey && aiKey.trim())
+  const ctx = current ? coachContext(current.content) : null
+
+  // Drop one of the student's own pieces of work into the box (append, never
+  // overwrite) so they don't retype it.
+  const seedFrom = (value: string): void => {
+    setText((prev) => (prev.trim() ? prev.trim() + '\n' + value : value))
+  }
 
   if (!configured) {
     return (
@@ -56,6 +72,22 @@ export function AiHelper(): JSX.Element {
         For brainstorming, planning, and feedback — it gives you ideas and questions, but never
         writes your essay for you. Your text is sent to Anthropic only when you press a button.
       </p>
+      {ctx && CHIPS.some((c) => ctx[c.key]) && (
+        <div className="coach-chips">
+          <span className="coach-chips-label">Use your work:</span>
+          {CHIPS.filter((c) => ctx[c.key]).map((c) => (
+            <button
+              key={c.key}
+              className="chip"
+              data-testid={`coach-chip-${c.key}`}
+              onClick={() => seedFrom(ctx[c.key])}
+              title={`Add ${c.label} to the box`}
+            >
+              + {c.label}
+            </button>
+          ))}
+        </div>
+      )}
       <textarea
         className="ai-input"
         data-testid="ai-input"

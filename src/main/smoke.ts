@@ -144,6 +144,12 @@ const PROBE = `(async () => {
   (await waitFor('[data-testid="tab-clarity"]', 'clarity tab (configured)')).click();
   await waitFor('[data-testid="ai-helper"]', 'AI helper appears once a key is set');
 
+  // The coach can be seeded from the student's own work (no retyping, no ghostwriting).
+  (await waitFor('[data-testid="coach-chip-assignment"]', 'a coach seed chip')).click();
+  await sleep(60);
+  const coachBox = q('[data-testid="ai-input"]');
+  if (!coachBox || !coachBox.value.trim()) throw new Error('coach seed chip did not fill the input');
+
   // Visual planning board: toggle in, add a card, sort it into a part of the paper.
   (await waitFor('[data-testid="board-toggle"]', 'board toggle')).click();
   await waitFor('[data-testid="board"]', 'planning board');
