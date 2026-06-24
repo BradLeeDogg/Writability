@@ -200,6 +200,16 @@ export function SettingsPanel(): JSX.Element {
       <label className="toggle">
         <input
           type="checkbox"
+          data-testid="toggle-ruler"
+          checked={settings.readingRuler}
+          onChange={(e) => update({ readingRuler: e.target.checked })}
+        />
+        <span>Reading ruler (a tinted guide that follows your pointer)</span>
+      </label>
+
+      <label className="toggle">
+        <input
+          type="checkbox"
           data-testid="toggle-define"
           checked={settings.defineTerms}
           onChange={(e) => update({ defineTerms: e.target.checked })}

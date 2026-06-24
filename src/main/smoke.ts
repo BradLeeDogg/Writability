@@ -138,6 +138,13 @@ const PROBE = `(async () => {
   (await waitFor('[data-testid="toggle-spotlight"]', 'spotlight toggle')).click();
   await waitFor('.editor-surface.spotlight', 'spotlight mode applied');
 
+  // Reading ruler: enable it, then move the pointer over the page to reveal the band.
+  (await waitFor('[data-testid="toggle-ruler"]', 'reading-ruler toggle')).click();
+  await sleep(80);
+  const scroll = await waitFor('.editor-scroll', 'editor scroll area');
+  scroll.dispatchEvent(new MouseEvent('mousemove', { bubbles: true, clientX: 220, clientY: 240 }));
+  await waitFor('[data-testid="reading-ruler"]', 'reading ruler follows the pointer');
+
   // Toggle a setting to exercise the live theming path.
   const themeBtn = q('[data-testid="theme-calm-dark"]');
   if (themeBtn) themeBtn.click();

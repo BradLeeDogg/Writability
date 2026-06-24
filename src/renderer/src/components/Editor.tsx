@@ -1,4 +1,4 @@
-import { useEffect, useReducer } from 'react'
+import { useEffect, useReducer, useRef, useState } from 'react'
 import { EditorContent, useEditor } from '@tiptap/react'
 import type { Editor as TiptapEditor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
@@ -16,6 +16,7 @@ export function Editor(): JSX.Element {
   const setDoc = useStore((s) => s.setDoc)
   const spotlightMode = useStore((s) => s.settings.spotlightMode)
   const defineTerms = useStore((s) => s.settings.defineTerms)
+  const readingRuler = useStore((s) => s.settings.readingRuler)
 
   const editor = useEditor({
     extensions: [
@@ -59,6 +60,22 @@ export function Editor(): JSX.Element {
     if (editor) editor.view.dispatch(editor.state.tr.setMeta(glossaryKey, defineTerms))
   }, [editor, defineTerms])
 
+  // Reading ruler: a tinted band that follows the pointer down the page to
+  // help the eye hold its line. Lives in the scroll container and ignores
+  // pointer events so it never gets in the way of writing.
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const [rulerTop, setRulerTop] = useState<number | null>(null)
+  useEffect(() => {
+    if (!readingRuler) setRulerTop(null)
+  }, [readingRuler])
+  const onRulerMove = (e: React.MouseEvent): void => {
+    if (!readingRuler) return
+    const el = scrollRef.current
+    if (!el) return
+    const rect = el.getBoundingClientRect()
+    setRulerTop(e.clientY - rect.top + el.scrollTop)
+  }
+
   const words = editor?.storage.characterCount.words() ?? 0
   const goal = current.meta.wordGoal
 
@@ -73,7 +90,20 @@ export function Editor(): JSX.Element {
     <section className="editor-wrap" data-testid="editor" aria-label="Writing area">
       <ThesisPin />
       <FormatBar editor={editor} onInsertOutline={insertOutline} />
-      <div className="editor-scroll">
+      <div
+        className="editor-scroll"
+        ref={scrollRef}
+        onMouseMove={onRulerMove}
+        onMouseLeave={() => setRulerTop(null)}
+      >
+        {readingRuler && rulerTop !== null && (
+          <div
+            className="reading-ruler"
+            data-testid="reading-ruler"
+            style={{ top: rulerTop }}
+            aria-hidden="true"
+          />
+        )}
         <EditorContent
           editor={editor}
           className={'editor-surface' + (spotlightMode ? ' spotlight' : '')}

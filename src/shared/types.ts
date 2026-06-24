@@ -135,6 +135,8 @@ export interface AppSettings {
   focusMode: boolean
   /** Spotlight the current paragraph and dim the rest (typewriter focus). */
   spotlightMode: boolean
+  /** A tinted reading guide band that follows the pointer across the page. */
+  readingRuler: boolean
   /** Underline known academic terms with a hover-to-define tooltip. */
   defineTerms: boolean
   /** Preferred length of a focus-timer work session, in minutes. */
@@ -175,6 +177,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   maxLineWidth: 68,
   focusMode: false,
   spotlightMode: false,
+  readingRuler: false,
   defineTerms: false,
   focusTimerMinutes: 25,
   reduceMotion: false,
