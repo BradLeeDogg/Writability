@@ -153,6 +153,13 @@ const PROBE = `(async () => {
   // Visual planning board: toggle in, add a card, sort it into a part of the paper.
   (await waitFor('[data-testid="board-toggle"]', 'board toggle')).click();
   await waitFor('[data-testid="board"]', 'planning board');
+
+  // The brainstorm box can be seeded from the student's own work (no retyping).
+  (await waitFor('[data-testid="board-seed-assignment"]', 'board brainstorm seed chip')).click();
+  await sleep(50);
+  const boardInput = q('[data-testid="board-ai-input"]');
+  if (!boardInput || !boardInput.value.trim()) throw new Error('board seed chip did not fill the brainstorm box');
+
   (await waitFor('[data-testid="add-card"]', 'add card button')).click();
   setValue(await waitFor('[data-testid="board-card"] .card-text', 'a card on the board'), 'a planned idea');
 
@@ -169,6 +176,20 @@ const PROBE = `(async () => {
   if (!document.querySelector('[data-testid="board-column"]')) throw new Error('no part columns rendered');
   if (!document.querySelector('[data-testid="board-column"] [data-testid="board-card"]')) {
     throw new Error('sorted card did not appear in a column');
+  }
+
+  // Drag the card from its column into "Unsorted" (the last column) and verify it moves.
+  const grip = await waitFor('[data-testid="card-grip"]', 'card drag grip');
+  const cols = [...document.querySelectorAll('[data-testid="board-column"]')];
+  const target = cols[cols.length - 1];
+  if (target.querySelector('[data-testid="board-card"]')) throw new Error('target column was not empty to start');
+  const dt = new DataTransfer();
+  grip.dispatchEvent(new DragEvent('dragstart', { bubbles: true, dataTransfer: dt }));
+  target.dispatchEvent(new DragEvent('dragover', { bubbles: true, dataTransfer: dt }));
+  target.dispatchEvent(new DragEvent('drop', { bubbles: true, dataTransfer: dt }));
+  await sleep(80);
+  if (!target.querySelector('[data-testid="board-card"]')) {
+    throw new Error('drag-to-sort did not move the card into the target column');
   }
 
   (await waitFor('[data-testid="board-toggle"]', 'board toggle back')).click();
