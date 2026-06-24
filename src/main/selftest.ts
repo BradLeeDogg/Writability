@@ -1,13 +1,13 @@
 import assert from 'node:assert'
-import { rmSync } from 'fs'
+import { readFileSync, rmSync } from 'fs'
 import { app } from 'electron'
 import { writeJsonAtomic, readJson } from './services/atomic'
 import { createPaper, deletePaper, listPapers, openPaper, savePaper } from './services/papers'
-import { getSettings, saveSettings } from './services/settings'
+import { encryptionAvailable, getSettings, saveSettings } from './services/settings'
 import { renderExport } from './services/export'
 import { applyBundle, buildBundle } from './services/backup'
 import { runAiTask } from './services/ai'
-import { dataDir } from './services/paths'
+import { dataDir, settingsPath } from './services/paths'
 import { buildPrompt, isValidModel, splitIntoItems } from '@shared/ai'
 import { analyzeClarity, suggestSentenceSplit } from '@shared/clarity'
 import { decodeAssignment } from '@shared/assignment'
@@ -173,6 +173,18 @@ export async function runSelftest(): Promise<void> {
     assert.equal(getSettings().fontScale, 1.35)
     assert.equal(getSettings().fontFamily, 'opendyslexic')
     pass('settings persistence')
+
+    // --- API key encrypted at rest --------------------------------------
+    saveSettings({ ...getSettings(), aiApiKey: 'sk-secret-xyz' })
+    assert.equal(getSettings().aiApiKey, 'sk-secret-xyz', 'API key round-trips through storage')
+    const onDisk = readFileSync(settingsPath(), 'utf8')
+    if (encryptionAvailable()) {
+      assert.ok(!onDisk.includes('sk-secret-xyz'), 'API key is encrypted at rest (no plaintext on disk)')
+      assert.ok(onDisk.includes('aiKeyEnc'), 'ciphertext is what gets stored')
+    }
+    saveSettings({ ...getSettings(), aiApiKey: '' })
+    assert.ok(!readFileSync(settingsPath(), 'utf8').includes('aiKeyEnc'), 'clearing the key removes the ciphertext')
+    pass('API key encrypted at rest')
 
     // --- clarity heuristics ---------------------------------------------
     const report = analyzeClarity(
