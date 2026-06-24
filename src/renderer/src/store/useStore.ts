@@ -37,6 +37,8 @@ interface StoreState {
   toolsTab: ToolsTab
   /** When true, the main area shows the visual planning board instead of the editor. */
   boardOpen: boolean
+  /** When true, the immersive "Read to me" overlay is open. */
+  readAloudOpen: boolean
 
   // lifecycle
   init: () => Promise<void>
@@ -91,6 +93,8 @@ interface StoreState {
   setToolsTab: (tab: ToolsTab) => void
   toggleFocus: () => void
   toggleBoard: () => void
+  openReadAloud: () => void
+  closeReadAloud: () => void
 
   // export
   exportCurrent: (format: ExportFormat) => Promise<ExportResult>
@@ -154,6 +158,7 @@ export const useStore = create<StoreState>()((set, get) => {
     toolsOpen: true,
     toolsTab: 'assignment',
     boardOpen: false,
+    readAloudOpen: false,
 
     async init() {
       const [settings, papers] = await Promise.all([window.api.getSettings(), window.api.listPapers()])
@@ -466,6 +471,14 @@ export const useStore = create<StoreState>()((set, get) => {
 
     toggleBoard() {
       set((s) => ({ boardOpen: !s.boardOpen }))
+    },
+
+    openReadAloud() {
+      set({ readAloudOpen: true })
+    },
+
+    closeReadAloud() {
+      set({ readAloudOpen: false })
     },
 
     async exportCurrent(format) {

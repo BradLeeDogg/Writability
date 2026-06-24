@@ -19,7 +19,7 @@ export function ReadingPanel(): JSX.Element {
       setSpeaking(false)
       return
     }
-    const ok = speak(text, ttsRate, () => setSpeaking(false))
+    const ok = speak(text, { rate: ttsRate, onEnd: () => setSpeaking(false) })
     setSpeaking(ok)
     if (!ok) alert('Read-aloud is not available on this device.')
   }

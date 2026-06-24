@@ -1,8 +1,6 @@
 import { useState } from 'react'
 import { useStore } from '../store/useStore'
 import { FocusTimer } from './FocusTimer'
-import { speak, stopSpeaking, ttsSupported } from '../lib/tts'
-import { docToPlainText } from '@shared/doc'
 import { ESSAY_TYPE_LABELS } from '@shared/types'
 import type { ExportFormat } from '@shared/types'
 
@@ -19,7 +17,7 @@ export function Toolbar(): JSX.Element {
   const closePaper = useStore((s) => s.closePaper)
   const saveState = useStore((s) => s.saveState)
   const focusMode = useStore((s) => s.settings.focusMode)
-  const ttsRate = useStore((s) => s.settings.ttsRate)
+  const openReadAloud = useStore((s) => s.openReadAloud)
   const toggleFocus = useStore((s) => s.toggleFocus)
   const toggleOutline = useStore((s) => s.toggleOutline)
   const toggleTools = useStore((s) => s.toggleTools)
@@ -27,20 +25,7 @@ export function Toolbar(): JSX.Element {
   const toggleBoard = useStore((s) => s.toggleBoard)
   const exportCurrent = useStore((s) => s.exportCurrent)
 
-  const [speaking, setSpeaking] = useState(false)
   const [exporting, setExporting] = useState(false)
-
-  const onReadAloud = (): void => {
-    if (speaking) {
-      stopSpeaking()
-      setSpeaking(false)
-      return
-    }
-    const text = docToPlainText(current.content.doc)
-    const ok = speak(text, ttsRate, () => setSpeaking(false))
-    setSpeaking(ok)
-    if (!ok) alert('Read-aloud is not available on this device.')
-  }
 
   const onExport = async (format: ExportFormat): Promise<void> => {
     setExporting(true)
@@ -85,17 +70,14 @@ export function Toolbar(): JSX.Element {
 
         <FocusTimer />
 
-        {ttsSupported() && (
-          <button
-            className={'ghost' + (speaking ? ' active' : '')}
-            data-testid="read-aloud"
-            aria-pressed={speaking}
-            onClick={onReadAloud}
-            title="Read the paper aloud"
-          >
-            {speaking ? '◼ Stop' : '🔊 Read aloud'}
-          </button>
-        )}
+        <button
+          className="ghost"
+          data-testid="read-aloud"
+          onClick={openReadAloud}
+          title="Read the paper aloud, highlighting each sentence"
+        >
+          🔊 Read to me
+        </button>
 
         <details className="menu">
           <summary className="ghost" aria-label="Export paper">

@@ -760,6 +760,63 @@ fieldset.field {
   background: rgba(0, 0, 0, 0.1);
 }
 
+/* Immersive "Read to me" overlay */
+.reader-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+}
+.reader-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.7rem 1.2rem;
+  border-bottom: 1px solid var(--border);
+}
+.reader-title {
+  font-weight: 600;
+  color: var(--text-muted);
+}
+.reader-controls {
+  display: flex;
+  gap: 0.5rem;
+}
+.reader-page {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  margin: 0 auto;
+  padding: 2.5rem 1.5rem 6rem;
+  max-width: var(--max-line-width);
+  font-family: var(--reading-font);
+  font-size: calc(1.3rem * var(--font-scale));
+  line-height: var(--line-spacing);
+  letter-spacing: var(--letter-spacing);
+  color: var(--text);
+}
+.reader-sentence {
+  border-radius: 5px;
+  padding: 0 2px;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+.reader-sentence:hover {
+  background: var(--surface-2);
+}
+.reader-sentence.active {
+  background: var(--accent);
+  color: var(--accent-contrast);
+  box-shadow: 0 0 0 3px var(--accent);
+}
+.reader-note {
+  text-align: center;
+  padding: 0 1.5rem 1.2rem;
+}
+
 /* Opt-in AI helper */
 .ai-helper,
 .ai-helper-off {

@@ -16,7 +16,7 @@ import { TRANSITIONS } from '@shared/transitions'
 import { GLOSSARY, glossaryMap } from '@shared/glossary'
 import { summarizeSource } from '@shared/reading'
 import { formatCitation } from '@shared/citations'
-import { docToPlainText } from '@shared/doc'
+import { docToPlainText, splitSentences, sentenceIndexAt } from '@shared/doc'
 import {
   findThesisNode,
   makeBodyParagraph,
@@ -354,6 +354,20 @@ export async function runSelftest(): Promise<void> {
     assert.ok(!blank.ok, 'blank input is rejected before any call')
     saveSettings(baseSettings)
     pass('AI coach (opt-in, mocked)')
+
+    // --- read-aloud sentence splitting (pure) ---------------------------
+    const sents = splitSentences('Hello there. How are you?\n\nNew para! Yes.')
+    assert.equal(sents.length, 4, 'splits sentences across a paragraph break')
+    assert.equal(sents[0].text, 'Hello there.')
+    assert.equal(sents[1].text, 'How are you?')
+    assert.equal(sents[3].text, 'Yes.')
+    assert.ok(sents[0].start === 0 && sents[0].end >= 12, 'sentence carries source offsets')
+    const ps = splitSentences('Hello there. How are you?')
+    assert.equal(sentenceIndexAt(ps, 0), 0, 'char index 0 maps to first sentence')
+    assert.equal(sentenceIndexAt(ps, 14), 1, 'char index in the second maps to it')
+    assert.deepEqual(splitSentences(''), [], 'empty text yields no sentences')
+    assert.equal(splitSentences('A fragment with no end').length, 1, 'a fragment is one sentence')
+    pass('read-aloud sentence splitting')
 
     // --- heuristic edge cases (robustness on empty / sparse input) ------
     assert.equal(analyzeClarity('').wordCount, 0, 'empty text has zero words')

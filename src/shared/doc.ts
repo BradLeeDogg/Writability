@@ -60,3 +60,64 @@ export function countWords(text: string): number {
 export function emptyDoc(): unknown {
   return { type: 'doc', content: [{ type: 'paragraph' }] }
 }
+
+export interface Sentence {
+  text: string
+  /** Offsets into the source string (so a TTS char index maps to a sentence). */
+  start: number
+  end: number
+}
+
+/**
+ * Split text into sentences, keeping each one's offset range in the source
+ * string. Paragraph breaks always end a sentence; otherwise we break after
+ * .!? (and any trailing quotes/brackets) when followed by whitespace or the
+ * end. Offsets let read-aloud highlight the sentence under a speech boundary.
+ */
+export function splitSentences(text: string): Sentence[] {
+  const out: Sentence[] = []
+  if (!text) return out
+  const n = text.length
+  const closers = '.!?")]’”'
+  let i = 0
+  let start = 0
+  const push = (s: number, e: number): void => {
+    const raw = text.slice(s, e)
+    if (raw.trim().length > 0) out.push({ text: raw.trim(), start: s, end: e })
+  }
+  while (i < n) {
+    const ch = text[i]
+    if (ch === '\n') {
+      push(start, i)
+      i++
+      start = i
+      continue
+    }
+    if (ch === '.' || ch === '!' || ch === '?') {
+      let j = i + 1
+      while (j < n && closers.includes(text[j])) j++
+      if (j >= n || /\s/.test(text[j])) {
+        push(start, j)
+        while (j < n && /\s/.test(text[j])) j++
+        i = j
+        start = i
+        continue
+      }
+      i = j
+      continue
+    }
+    i++
+  }
+  if (start < n) push(start, n)
+  return out
+}
+
+/** Which sentence contains a given source offset (the last one starting at/before it). */
+export function sentenceIndexAt(sentences: Sentence[], charIndex: number): number {
+  let idx = 0
+  for (let k = 0; k < sentences.length; k++) {
+    if (sentences[k].start <= charIndex) idx = k
+    else break
+  }
+  return idx
+}

@@ -6,6 +6,7 @@ import { OutlinePanel } from './components/OutlinePanel'
 import { Editor } from './components/Editor'
 import { ToolsPanel } from './components/ToolsPanel'
 import { Board } from './components/Board'
+import { ReadAloudOverlay } from './components/ReadAloudOverlay'
 import { Welcome } from './components/Welcome'
 
 export default function App(): JSX.Element {
@@ -58,6 +59,7 @@ export default function App(): JSX.Element {
   return (
     <div className="app" data-testid="app">
       {showWelcome && <Welcome />}
+      <ReadAloudOverlay />
       <Toolbar />
       {boardOpen ? (
         <Board />
