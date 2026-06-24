@@ -4,6 +4,7 @@ import { decodeAssignment } from '@shared/assignment'
 import { splitIntoItems } from '@shared/ai'
 import { uid } from '@shared/ids'
 import { insertNoteUnder, makeBodyParagraph, nextBodyParagraphNumber } from '@shared/outline-templates'
+import { mergeCustomWord } from '@shared/spelling'
 import type { AiRunInput, AiRunResult, BackupResult, ExportResult, RestoreResult } from '@shared/api'
 import { CARD_COLORS, DEFAULT_SETTINGS } from '@shared/types'
 import type {
@@ -46,6 +47,8 @@ interface StoreState {
 
   // settings
   updateSettings: (patch: Partial<AppSettings>) => void
+  addCustomWord: (word: string) => void
+  removeCustomWord: (word: string) => void
 
   // papers
   createPaper: (input: { title: string; essayType: EssayType }) => Promise<void>
@@ -180,6 +183,18 @@ export const useStore = create<StoreState>()((set, get) => {
       applySettings(settings)
       set({ settings })
       persistSettings()
+    },
+
+    addCustomWord(word) {
+      const next = mergeCustomWord(get().settings.customWords, word)
+      if (next !== get().settings.customWords) get().updateSettings({ customWords: next })
+    },
+
+    removeCustomWord(word) {
+      const lower = word.toLowerCase()
+      get().updateSettings({
+        customWords: get().settings.customWords.filter((w) => w.toLowerCase() !== lower)
+      })
     },
 
     async createPaper(input) {

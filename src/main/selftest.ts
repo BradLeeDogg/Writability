@@ -19,7 +19,7 @@ import { formatCitation } from '@shared/citations'
 import { docToPlainText, splitSentences, sentenceIndexAt, splitWords, wordIndexAt } from '@shared/doc'
 import { coachContext } from '@shared/coach'
 import { pickVoice, sortVoices } from '@shared/voices'
-import { applyCase, confusableFor, looksLikeWord, rankSuggestions } from '@shared/spelling'
+import { applyCase, confusableFor, looksLikeWord, mergeCustomWord, rankSuggestions } from '@shared/spelling'
 import {
   findThesisNode,
   insertNoteUnder,
@@ -429,6 +429,11 @@ export async function runSelftest(): Promise<void> {
     assert.equal(applyCase('Becuase', 'because'), 'Because', 'capitalised words keep their capital')
     assert.equal(applyCase('HELLO', 'hello'), 'HELLO', 'all-caps stays all-caps')
     assert.equal(applyCase('cat', 'cats'), 'cats', 'lowercase stays lowercase')
+    // personal dictionary merge
+    assert.deepEqual(mergeCustomWord([], 'Zylphard'), ['zylphard'], 'a new word is stored lowercased')
+    assert.deepEqual(mergeCustomWord(['zylphard'], 'ZYLPHARD'), ['zylphard'], 'duplicates are ignored (case-insensitive)')
+    assert.deepEqual(mergeCustomWord(['a'], 'b2'), ['a'], 'words with digits are rejected')
+    assert.deepEqual(mergeCustomWord(['a'], '   '), ['a'], 'blank input is rejected')
     pass('gentle spelling helpers')
 
     // --- promote board cards into outline sections (pure) ---------------

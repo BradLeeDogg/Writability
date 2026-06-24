@@ -5,6 +5,8 @@ export interface SpellTarget {
   word: string
   from: number
   to: number
+  /** "spell" = a likely misspelling; "confusable" = a correctly-spelled homophone. */
+  kind: 'spell' | 'confusable'
   /** Viewport coordinates of the word (its left edge / bottom). */
   left: number
   top: number
@@ -14,13 +16,14 @@ interface Props {
   target: SpellTarget
   onReplace: (replacement: string) => void
   onIgnore: () => void
+  onTeach: () => void
   onClose: () => void
 }
 
 // A small, calm popover anchored under a flagged word: a few suggestions to
 // pick from, an optional plain-language hint for confused words, and a way to
 // say "this is fine". Deliberately not a red-squiggle scolding.
-export function SpellPopover({ target, onReplace, onIgnore, onClose }: Props): JSX.Element {
+export function SpellPopover({ target, onReplace, onIgnore, onTeach, onClose }: Props): JSX.Element {
   const help = useMemo(() => spellHelpFor(target.word), [target.word])
 
   useEffect(() => {
@@ -64,6 +67,11 @@ export function SpellPopover({ target, onReplace, onIgnore, onClose }: Props): J
           <p className="muted small">No suggestions — try sounding it out.</p>
         )}
         <div className="spell-actions">
+          {target.kind === 'spell' && (
+            <button className="ghost" data-testid="spell-add" onClick={onTeach}>
+              + Add to my words
+            </button>
+          )}
           <button className="ghost" data-testid="spell-ignore" onClick={onIgnore}>
             Leave it
           </button>

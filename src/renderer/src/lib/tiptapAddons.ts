@@ -163,7 +163,9 @@ export const Spellcheck = Extension.create({
         state: {
           init: () => ({ enabled: false, homophones: false, ignored: new Set<string>(), version: 0 }),
           apply(tr, value) {
-            const meta = tr.getMeta(spellcheckKey) as Partial<SpellState> & { ignore?: string }
+            const meta = tr.getMeta(spellcheckKey) as
+              | (Partial<SpellState> & { ignore?: string; bump?: boolean })
+              | undefined
             if (!meta) return value
             let next = value
             if (typeof meta.enabled === 'boolean') next = { ...next, enabled: meta.enabled }
@@ -173,6 +175,8 @@ export const Spellcheck = Extension.create({
               ignored.add(meta.ignore.toLowerCase())
               next = { ...next, ignored, version: next.version + 1 }
             }
+            // A bump just forces a re-scan (e.g. the personal dictionary changed).
+            if (meta.bump) next = { ...next, version: next.version + 1 }
             return next
           }
         },

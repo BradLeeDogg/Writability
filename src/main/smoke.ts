@@ -165,6 +165,27 @@ const PROBE = `(async () => {
   if (q('.prose').textContent.includes('becuase')) throw new Error('misspelling still present after fix');
   if (!q('.prose').textContent.includes('because')) throw new Error('correction was not applied');
 
+  // Add-to-dictionary: teach it a made-up name and the underline goes away.
+  prose.focus();
+  document.execCommand('insertText', false, ' Zylphard ');
+  let name = null;
+  for (let i = 0; i < 80; i++) {
+    name = [...document.querySelectorAll('.pm-misspelled')].find((e) => e.textContent === 'Zylphard');
+    if (name) break;
+    await sleep(80);
+  }
+  if (!name) throw new Error('a made-up word was not flagged');
+  name.click();
+  await waitFor('[data-testid="spell-popover"]', 'popover for the made-up word');
+  (await waitFor('[data-testid="spell-add"]', 'add-to-dictionary button')).click();
+  let gone = false;
+  for (let i = 0; i < 60; i++) {
+    if (![...document.querySelectorAll('.pm-misspelled')].some((e) => e.textContent === 'Zylphard')) { gone = true; break; }
+    await sleep(80);
+  }
+  if (!gone) throw new Error('word still flagged after adding it to the dictionary');
+  await waitFor('[data-testid="my-word"]', 'the taught word appears in My words');
+
   // Toggle a setting to exercise the live theming path.
   const themeBtn = q('[data-testid="theme-calm-dark"]');
   if (themeBtn) themeBtn.click();

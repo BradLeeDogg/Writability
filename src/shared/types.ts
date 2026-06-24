@@ -143,6 +143,8 @@ export interface AppSettings {
   spellHelp: boolean
   /** Also mark commonly-confused words (their/there…) with a "which one?" hint. */
   homophoneHelp: boolean
+  /** Personal dictionary: words the student has taught the spell-checker. */
+  customWords: string[]
   /** Preferred length of a focus-timer work session, in minutes. */
   focusTimerMinutes: number
   /** Respect/force reduced motion. */
@@ -185,6 +187,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   defineTerms: false,
   spellHelp: true,
   homophoneHelp: false,
+  customWords: [],
   focusTimerMinutes: 25,
   reduceMotion: false,
   overlayTint: 'none',

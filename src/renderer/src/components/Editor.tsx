@@ -9,7 +9,7 @@ import { ThesisPin } from './ThesisPin'
 import { SpellPopover } from './SpellPopover'
 import type { SpellTarget } from './SpellPopover'
 import { Spotlight, spotlightKey, Glossary, glossaryKey, Spellcheck, spellcheckKey } from '../lib/tiptapAddons'
-import { ensureSpell } from '../lib/spell'
+import { ensureSpell, setCustomWords } from '../lib/spell'
 import { outlineToDocContent } from '@shared/scaffold'
 import { TRANSITIONS } from '@shared/transitions'
 
@@ -22,6 +22,8 @@ export function Editor(): JSX.Element {
   const readingRuler = useStore((s) => s.settings.readingRuler)
   const spellHelp = useStore((s) => s.settings.spellHelp)
   const homophoneHelp = useStore((s) => s.settings.homophoneHelp)
+  const customWords = useStore((s) => s.settings.customWords)
+  const addCustomWord = useStore((s) => s.addCustomWord)
 
   const editor = useEditor({
     extensions: [
@@ -80,6 +82,13 @@ export function Editor(): JSX.Element {
     }
   }, [editor, spellHelp, homophoneHelp])
 
+  // Keep the spell engine's personal dictionary in sync, and re-scan when it
+  // changes so newly-taught words lose their underline.
+  useEffect(() => {
+    setCustomWords(customWords)
+    if (editor) editor.view.dispatch(editor.state.tr.setMeta(spellcheckKey, { bump: true }))
+  }, [editor, customWords])
+
   // Clicking a spelling mark opens the fix popover. Delegated from the page so
   // it works without ProseMirror's own click plumbing.
   const [spell, setSpell] = useState<SpellTarget | null>(null)
@@ -95,7 +104,8 @@ export function Editor(): JSX.Element {
     const from = editor.view.posAtDOM(dom, 0)
     const to = from + word.length
     const coords = editor.view.coordsAtPos(from)
-    setSpell({ word, from, to, left: coords.left, top: coords.bottom })
+    const kind = el.classList.contains('pm-confusable') ? 'confusable' : 'spell'
+    setSpell({ word, from, to, kind, left: coords.left, top: coords.bottom })
   }
   const replaceSpell = (replacement: string): void => {
     if (!editor || !spell) return
@@ -107,6 +117,10 @@ export function Editor(): JSX.Element {
   }
   const ignoreSpell = (): void => {
     if (editor && spell) editor.view.dispatch(editor.state.tr.setMeta(spellcheckKey, { ignore: spell.word }))
+    setSpell(null)
+  }
+  const teachSpell = (): void => {
+    if (spell) addCustomWord(spell.word)
     setSpell(null)
   }
 
@@ -161,7 +175,13 @@ export function Editor(): JSX.Element {
         />
       </div>
       {spell && (
-        <SpellPopover target={spell} onReplace={replaceSpell} onIgnore={ignoreSpell} onClose={() => setSpell(null)} />
+        <SpellPopover
+          target={spell}
+          onReplace={replaceSpell}
+          onIgnore={ignoreSpell}
+          onTeach={teachSpell}
+          onClose={() => setSpell(null)}
+        />
       )}
       <footer className="editor-status" aria-live="polite">
         <span>

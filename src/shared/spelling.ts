@@ -79,3 +79,15 @@ export function applyCase(model: string, suggestion: string): string {
   if (model[0] === model[0].toUpperCase()) return suggestion[0].toUpperCase() + suggestion.slice(1)
   return suggestion
 }
+
+/**
+ * Add a word to a personal dictionary list: normalise to lowercase, reject
+ * empty/invalid tokens, and de-duplicate (case-insensitive). Returns the same
+ * list unchanged when there's nothing to add.
+ */
+export function mergeCustomWord(list: string[], word: string): string[] {
+  const w = normalizeWord(word).trim().toLowerCase()
+  if (!w || !/^[a-z][a-z'’-]*$/.test(w)) return list
+  if (list.some((x) => x.toLowerCase() === w)) return list
+  return [...list, w]
+}

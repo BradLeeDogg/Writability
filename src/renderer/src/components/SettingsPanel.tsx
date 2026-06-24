@@ -30,6 +30,7 @@ const OVERLAYS: { value: OverlayTint; label: string }[] = [
 export function SettingsPanel(): JSX.Element {
   const settings = useStore((s) => s.settings)
   const update = useStore((s) => s.updateSettings)
+  const removeCustomWord = useStore((s) => s.removeCustomWord)
   const createBackup = useStore((s) => s.createBackup)
   const restoreBackup = useStore((s) => s.restoreBackup)
   const replayWelcome = useStore((s) => s.replayWelcome)
@@ -236,6 +237,23 @@ export function SettingsPanel(): JSX.Element {
         />
         <span>Mark commonly-confused words (their/there, your/you’re…)</span>
       </label>
+
+      {settings.customWords.length > 0 && (
+        <div className="my-words" data-testid="my-words">
+          <span className="my-words-label">My words:</span>
+          {settings.customWords.map((w) => (
+            <button
+              key={w}
+              className="chip"
+              data-testid="my-word"
+              onClick={() => removeCustomWord(w)}
+              title={`Remove “${w}” from your words`}
+            >
+              {w} ✕
+            </button>
+          ))}
+        </div>
+      )}
 
       <label className="toggle">
         <input

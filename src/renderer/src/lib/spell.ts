@@ -10,6 +10,13 @@ import { applyCase, confusableFor, normalizeWord, rankSuggestions } from '@share
 
 let checker: ReturnType<typeof nspell> | null = null
 let building = false
+// The student's personal dictionary (lowercased). Words here are always
+// treated as correctly spelled.
+let custom = new Set<string>()
+
+export function setCustomWords(words: string[]): void {
+  custom = new Set(words.map((w) => normalizeWord(w).toLowerCase()))
+}
 
 export function spellReady(): boolean {
   return checker !== null
@@ -37,7 +44,9 @@ export function ensureSpell(onReady?: () => void): void {
 
 export function isMisspelled(word: string): boolean {
   if (!checker) return false
-  return !checker.correct(normalizeWord(word))
+  const norm = normalizeWord(word)
+  if (custom.has(norm.toLowerCase())) return false
+  return !checker.correct(norm)
 }
 
 export interface SpellHelp {

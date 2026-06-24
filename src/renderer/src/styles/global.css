@@ -1177,8 +1177,27 @@ fieldset.field {
 }
 .spell-actions {
   display: flex;
-  justify-content: flex-end;
-  margin-top: 0.5rem;
+  justify-content: space-between;
+  gap: 0.4rem;
+  margin-top: 0.6rem;
+}
+.spell-actions .ghost {
+  font-size: 0.82rem;
+  padding: 3px 8px;
+}
+.my-words {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+  margin: 0.1rem 0 0.3rem;
+}
+.my-words-label {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+.my-words .chip {
+  font-size: 0.82rem;
 }
 
 /* Reading guide band that tracks the pointer (see Editor.tsx). */
