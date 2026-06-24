@@ -220,6 +220,26 @@ export function SettingsPanel(): JSX.Element {
       <label className="toggle">
         <input
           type="checkbox"
+          data-testid="toggle-spell"
+          checked={settings.spellHelp}
+          onChange={(e) => update({ spellHelp: e.target.checked })}
+        />
+        <span>Gentle spelling help (underline likely misspellings)</span>
+      </label>
+
+      <label className="toggle">
+        <input
+          type="checkbox"
+          data-testid="toggle-homophone"
+          checked={settings.homophoneHelp}
+          onChange={(e) => update({ homophoneHelp: e.target.checked })}
+        />
+        <span>Mark commonly-confused words (their/there, your/you’re…)</span>
+      </label>
+
+      <label className="toggle">
+        <input
+          type="checkbox"
           checked={settings.reduceMotion}
           onChange={(e) => update({ reduceMotion: e.target.checked })}
         />

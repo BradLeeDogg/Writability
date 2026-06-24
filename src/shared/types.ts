@@ -139,6 +139,10 @@ export interface AppSettings {
   readingRuler: boolean
   /** Underline known academic terms with a hover-to-define tooltip. */
   defineTerms: boolean
+  /** Gently underline likely misspellings and offer suggestions. */
+  spellHelp: boolean
+  /** Also mark commonly-confused words (their/there…) with a "which one?" hint. */
+  homophoneHelp: boolean
   /** Preferred length of a focus-timer work session, in minutes. */
   focusTimerMinutes: number
   /** Respect/force reduced motion. */
@@ -179,6 +183,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   spotlightMode: false,
   readingRuler: false,
   defineTerms: false,
+  spellHelp: true,
+  homophoneHelp: false,
   focusTimerMinutes: 25,
   reduceMotion: false,
   overlayTint: 'none',

@@ -19,6 +19,7 @@ import { formatCitation } from '@shared/citations'
 import { docToPlainText, splitSentences, sentenceIndexAt, splitWords, wordIndexAt } from '@shared/doc'
 import { coachContext } from '@shared/coach'
 import { pickVoice, sortVoices } from '@shared/voices'
+import { applyCase, confusableFor, looksLikeWord, rankSuggestions } from '@shared/spelling'
 import {
   findThesisNode,
   insertNoteUnder,
@@ -411,6 +412,24 @@ export async function runSelftest(): Promise<void> {
     assert.equal(pickVoice(voiceList, 'nope'), undefined, 'unknown preference uses engine default')
     assert.equal(pickVoice([], 'en1'), undefined, 'no voices -> engine default')
     pass('read-aloud voice selection')
+
+    // --- gentle spelling helpers (pure) ---------------------------------
+    assert.equal(looksLikeWord('because'), true, 'a normal word is checkable')
+    assert.equal(looksLikeWord('I'), false, 'single letters are skipped')
+    assert.equal(looksLikeWord('NASA'), false, 'acronyms are skipped')
+    assert.equal(looksLikeWord('cat5'), false, 'words with digits are skipped')
+    assert.equal(looksLikeWord("don't"), true, 'apostrophes are allowed')
+    const conf = confusableFor('There')
+    assert.ok(conf && conf.alternatives.includes('their'), 'confusable lookup is case-insensitive')
+    assert.ok(conf && conf.hint.length > 0, 'confusable carries a hint')
+    assert.equal(confusableFor('elephant'), undefined, 'non-confusable words return nothing')
+    const ranked = rankSuggestions('skool', ['school', 'skoal', 'dribble', 'stool'])
+    assert.equal(ranked[0], 'school', 'same-first-letter suggestions keep the dictionary order')
+    assert.equal(ranked[ranked.length - 1], 'dribble', 'a different first letter is de-prioritised')
+    assert.equal(applyCase('Becuase', 'because'), 'Because', 'capitalised words keep their capital')
+    assert.equal(applyCase('HELLO', 'hello'), 'HELLO', 'all-caps stays all-caps')
+    assert.equal(applyCase('cat', 'cats'), 'cats', 'lowercase stays lowercase')
+    pass('gentle spelling helpers')
 
     // --- promote board cards into outline sections (pure) ---------------
     const baseOutline = makeOutline('argument')

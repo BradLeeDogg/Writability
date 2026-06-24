@@ -1127,6 +1127,60 @@ fieldset.field {
   padding: 2rem 1.5rem 4rem;
   position: relative;
 }
+/* Gentle spelling marks: soft wavy underlines, not harsh red squiggles. */
+.pm-misspelled {
+  text-decoration: underline wavy var(--danger);
+  text-decoration-skip-ink: none;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.pm-confusable {
+  text-decoration: underline dotted var(--accent);
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.spell-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+}
+.spell-pop {
+  position: fixed;
+  z-index: 41;
+  width: 250px;
+  max-width: 80vw;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: var(--shadow);
+  padding: 0.7rem;
+}
+.spell-word {
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 0.3rem;
+}
+.spell-hint {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  margin: 0 0 0.5rem;
+  line-height: 1.4;
+}
+.spell-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+.spell-suggestions .chip {
+  font-size: 0.9rem;
+  color: var(--text);
+}
+.spell-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 0.5rem;
+}
+
 /* Reading guide band that tracks the pointer (see Editor.tsx). */
 .reading-ruler {
   position: absolute;

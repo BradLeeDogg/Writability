@@ -145,6 +145,26 @@ const PROBE = `(async () => {
   scroll.dispatchEvent(new MouseEvent('mousemove', { bubbles: true, clientX: 220, clientY: 240 }));
   await waitFor('[data-testid="reading-ruler"]', 'reading ruler follows the pointer');
 
+  // Gentle spelling help: type a misspelling, see it flagged, fix it from the popover.
+  const prose = await waitFor('.prose', 'editor prose');
+  prose.focus();
+  document.execCommand('insertText', false, ' becuase ');
+  let flagged = null;
+  for (let i = 0; i < 80; i++) {
+    flagged = [...document.querySelectorAll('.pm-misspelled')].find((e) => e.textContent === 'becuase');
+    if (flagged) break;
+    await sleep(80);
+  }
+  if (!flagged) throw new Error('"becuase" was not flagged as a misspelling');
+  flagged.click();
+  await waitFor('[data-testid="spell-popover"]', 'spelling popover');
+  const because = [...document.querySelectorAll('[data-testid="spell-suggestion"]')].find((b) => b.textContent === 'because');
+  if (!because) throw new Error('no "because" suggestion was offered');
+  because.click();
+  await sleep(150);
+  if (q('.prose').textContent.includes('becuase')) throw new Error('misspelling still present after fix');
+  if (!q('.prose').textContent.includes('because')) throw new Error('correction was not applied');
+
   // Toggle a setting to exercise the live theming path.
   const themeBtn = q('[data-testid="theme-calm-dark"]');
   if (themeBtn) themeBtn.click();

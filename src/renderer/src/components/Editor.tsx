@@ -6,7 +6,10 @@ import Placeholder from '@tiptap/extension-placeholder'
 import CharacterCount from '@tiptap/extension-character-count'
 import { useStore } from '../store/useStore'
 import { ThesisPin } from './ThesisPin'
-import { Spotlight, spotlightKey, Glossary, glossaryKey } from '../lib/tiptapAddons'
+import { SpellPopover } from './SpellPopover'
+import type { SpellTarget } from './SpellPopover'
+import { Spotlight, spotlightKey, Glossary, glossaryKey, Spellcheck, spellcheckKey } from '../lib/tiptapAddons'
+import { ensureSpell } from '../lib/spell'
 import { outlineToDocContent } from '@shared/scaffold'
 import { TRANSITIONS } from '@shared/transitions'
 
@@ -17,6 +20,8 @@ export function Editor(): JSX.Element {
   const spotlightMode = useStore((s) => s.settings.spotlightMode)
   const defineTerms = useStore((s) => s.settings.defineTerms)
   const readingRuler = useStore((s) => s.settings.readingRuler)
+  const spellHelp = useStore((s) => s.settings.spellHelp)
+  const homophoneHelp = useStore((s) => s.settings.homophoneHelp)
 
   const editor = useEditor({
     extensions: [
@@ -26,7 +31,8 @@ export function Editor(): JSX.Element {
       }),
       CharacterCount,
       Spotlight,
-      Glossary
+      Glossary,
+      Spellcheck
     ],
     content: current.content.doc as never,
     autofocus: 'end',
@@ -59,6 +65,50 @@ export function Editor(): JSX.Element {
   useEffect(() => {
     if (editor) editor.view.dispatch(editor.state.tr.setMeta(glossaryKey, defineTerms))
   }, [editor, defineTerms])
+
+  // Spellcheck: flip the flags, and build the dictionary the first time it's
+  // wanted (then nudge a recompute once it's ready).
+  useEffect(() => {
+    if (!editor) return
+    editor.view.dispatch(
+      editor.state.tr.setMeta(spellcheckKey, { enabled: spellHelp, homophones: homophoneHelp })
+    )
+    if (spellHelp) {
+      ensureSpell(() => {
+        if (!editor.isDestroyed) editor.view.dispatch(editor.state.tr.setMeta(spellcheckKey, {}))
+      })
+    }
+  }, [editor, spellHelp, homophoneHelp])
+
+  // Clicking a spelling mark opens the fix popover. Delegated from the page so
+  // it works without ProseMirror's own click plumbing.
+  const [spell, setSpell] = useState<SpellTarget | null>(null)
+  const onProseClick = (e: React.MouseEvent): void => {
+    if (!editor) return
+    const el = (e.target as HTMLElement).closest('.pm-misspelled, .pm-confusable') as HTMLElement | null
+    if (!el) {
+      setSpell(null)
+      return
+    }
+    const word = el.textContent ?? ''
+    const dom = el.firstChild ?? el
+    const from = editor.view.posAtDOM(dom, 0)
+    const to = from + word.length
+    const coords = editor.view.coordsAtPos(from)
+    setSpell({ word, from, to, left: coords.left, top: coords.bottom })
+  }
+  const replaceSpell = (replacement: string): void => {
+    if (!editor || !spell) return
+    const current = editor.state.doc.textBetween(spell.from, spell.to)
+    if (current === spell.word) {
+      editor.chain().focus().insertContentAt({ from: spell.from, to: spell.to }, replacement).run()
+    }
+    setSpell(null)
+  }
+  const ignoreSpell = (): void => {
+    if (editor && spell) editor.view.dispatch(editor.state.tr.setMeta(spellcheckKey, { ignore: spell.word }))
+    setSpell(null)
+  }
 
   // Reading ruler: a tinted band that follows the pointer down the page to
   // help the eye hold its line. Lives in the scroll container and ignores
@@ -95,6 +145,7 @@ export function Editor(): JSX.Element {
         ref={scrollRef}
         onMouseMove={onRulerMove}
         onMouseLeave={() => setRulerTop(null)}
+        onClick={onProseClick}
       >
         {readingRuler && rulerTop !== null && (
           <div
@@ -109,6 +160,9 @@ export function Editor(): JSX.Element {
           className={'editor-surface' + (spotlightMode ? ' spotlight' : '')}
         />
       </div>
+      {spell && (
+        <SpellPopover target={spell} onReplace={replaceSpell} onIgnore={ignoreSpell} onClose={() => setSpell(null)} />
+      )}
       <footer className="editor-status" aria-live="polite">
         <span>
           {words} {words === 1 ? 'word' : 'words'}
