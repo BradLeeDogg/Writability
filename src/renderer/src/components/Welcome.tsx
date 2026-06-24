@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useStore } from '../store/useStore'
 
 // A gentle, skippable first-run guide. Three short, plain-language cards — no
@@ -33,6 +33,39 @@ export function Welcome(): JSX.Element {
   const last = step === STEPS.length - 1
   const card = STEPS[step]
 
+  const backdropRef = useRef<HTMLDivElement>(null)
+  const primaryRef = useRef<HTMLButtonElement>(null)
+
+  // Move focus to the primary action when the dialog opens and on each step,
+  // so a keyboard or screen-reader user is never left behind the overlay.
+  useEffect(() => {
+    primaryRef.current?.focus()
+  }, [step])
+
+  // Modal keyboard contract: Escape closes; Tab is trapped inside the dialog.
+  const onKeyDown = (e: React.KeyboardEvent): void => {
+    if (e.key === 'Escape') {
+      e.preventDefault()
+      dismiss()
+      return
+    }
+    if (e.key !== 'Tab') return
+    const focusables = Array.from(
+      backdropRef.current?.querySelectorAll<HTMLElement>('button') ?? []
+    ).filter((el) => !el.hasAttribute('disabled'))
+    if (focusables.length === 0) return
+    const first = focusables[0]
+    const lastEl = focusables[focusables.length - 1]
+    const active = document.activeElement
+    if (e.shiftKey && active === first) {
+      e.preventDefault()
+      lastEl.focus()
+    } else if (!e.shiftKey && active === lastEl) {
+      e.preventDefault()
+      first.focus()
+    }
+  }
+
   return (
     <div
       className="welcome-backdrop"
@@ -40,6 +73,8 @@ export function Welcome(): JSX.Element {
       aria-modal="true"
       aria-label="Welcome to Writability"
       data-testid="welcome"
+      ref={backdropRef}
+      onKeyDown={onKeyDown}
     >
       <div className="welcome-card">
         <div className="welcome-icon" aria-hidden="true">
@@ -65,13 +100,19 @@ export function Welcome(): JSX.Element {
               </button>
             )}
             {last ? (
-              <button className="primary" data-testid="welcome-done" onClick={dismiss}>
+              <button
+                className="primary"
+                data-testid="welcome-done"
+                ref={primaryRef}
+                onClick={dismiss}
+              >
                 Start writing
               </button>
             ) : (
               <button
                 className="primary"
                 data-testid="welcome-next"
+                ref={primaryRef}
                 onClick={() => setStep((n) => n + 1)}
               >
                 Next

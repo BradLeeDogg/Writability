@@ -29,16 +29,20 @@ const PROBE = `(async () => {
   await waitFor('#root', 'react root');
   if (!q('#root').children.length) throw new Error('renderer mounted but #root is empty');
 
-  // First-run welcome guide: step through it and confirm it closes.
-  await waitFor('[data-testid="welcome"]', 'welcome guide');
-  for (let i = 0; i < 3 && q('[data-testid="welcome-next"]'); i++) {
-    q('[data-testid="welcome-next"]').click();
-    await sleep(60);
+  // First-run welcome guide: focus moves in, Next advances, Escape closes it.
+  const welcome = await waitFor('[data-testid="welcome"]', 'welcome guide');
+  await sleep(80); // let the focus effect run
+  if (!welcome.contains(document.activeElement)) {
+    throw new Error('welcome guide did not move focus into the dialog');
   }
-  (await waitFor('[data-testid="welcome-done"]', 'welcome done button')).click();
+  (await waitFor('[data-testid="welcome-next"]', 'welcome next')).click();
+  await sleep(60);
+  (document.activeElement || welcome).dispatchEvent(
+    new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })
+  );
   const wStart = Date.now();
   while (q('[data-testid="welcome"]') && Date.now() - wStart < 3000) await sleep(50);
-  if (q('[data-testid="welcome"]')) throw new Error('welcome guide did not close');
+  if (q('[data-testid="welcome"]')) throw new Error('welcome guide did not close on Escape');
 
   // Library view (no papers yet in the throwaway data dir).
   await waitFor('[data-testid="library"]', 'library view');
