@@ -74,6 +74,8 @@ export interface Card {
   x: number
   y: number
   color: CardColor
+  /** Optional id of the top-level outline section this idea belongs to. */
+  section?: string
 }
 
 export const CARD_COLORS: CardColor[] = ['yellow', 'blue', 'green', 'pink']

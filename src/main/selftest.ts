@@ -19,6 +19,7 @@ import { formatCitation } from '@shared/citations'
 import { docToPlainText, splitSentences, sentenceIndexAt } from '@shared/doc'
 import {
   findThesisNode,
+  insertNoteUnder,
   makeBodyParagraph,
   makeOutline,
   nextBodyParagraphNumber,
@@ -368,6 +369,25 @@ export async function runSelftest(): Promise<void> {
     assert.deepEqual(splitSentences(''), [], 'empty text yields no sentences')
     assert.equal(splitSentences('A fragment with no end').length, 1, 'a fragment is one sentence')
     pass('read-aloud sentence splitting')
+
+    // --- promote board cards into outline sections (pure) ---------------
+    const baseOutline = makeOutline('argument')
+    const sectionId = baseOutline[1].id // "Point 1"
+    const underSection = insertNoteUnder(baseOutline, sectionId, 'remember the 1990 data')
+    assert.equal(
+      underSection[1].children.length,
+      baseOutline[1].children.length + 1,
+      'a note lands under its chosen section'
+    )
+    const kids = underSection[1].children
+    assert.equal(kids[kids.length - 1].text, 'remember the 1990 data', 'the note carries the card text')
+    assert.equal(underSection.length, baseOutline.length, 'no extra top-level node when a section is given')
+    const unsorted = insertNoteUnder(baseOutline, undefined, 'loose idea')
+    assert.equal(unsorted.length, baseOutline.length + 1, 'an unsorted note becomes a top-level node')
+    assert.equal(unsorted[unsorted.length - 1].kind, 'note', 'promoted card is a note node')
+    const unknown = insertNoteUnder(baseOutline, 'no-such-id', 'x')
+    assert.equal(unknown.length, baseOutline.length + 1, 'unknown section falls back to top-level')
+    pass('promote cards to outline sections')
 
     // --- heuristic edge cases (robustness on empty / sparse input) ------
     assert.equal(analyzeClarity('').wordCount, 0, 'empty text has zero words')

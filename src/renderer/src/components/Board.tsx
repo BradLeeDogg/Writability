@@ -4,14 +4,21 @@ import type { Card } from '@shared/types'
 
 // A visual planning board (corkboard). Ideas live as sticky notes the student
 // can drag into an order that makes sense to them — built for non-linear and
-// visual thinkers. Cards can come from an AI brainstorm, and any card can be
-// sent to the outline so they can see *where* each idea belongs.
+// visual thinkers. Two views share the same cards:
+//   • Free   — a spatial corkboard you arrange by hand.
+//   • By part — columns, one per outline section, so you can sort each idea
+//               into the part of the paper it belongs to and see what's still
+//               empty ("what goes in the Introduction?").
+// Either way, "→ Outline" drops a card under its section, closing the loop
+// from idea → plan → page.
 export function Board(): JSX.Element {
   const current = useStore((s) => s.current)!
   const cards = current.content.cards
+  const sections = current.content.outline.map((n) => ({ id: n.id, label: n.label }))
   const addCard = useStore((s) => s.addCard)
   const addCardsFromText = useStore((s) => s.addCardsFromText)
   const updateCardText = useStore((s) => s.updateCardText)
+  const updateCardSection = useStore((s) => s.updateCardSection)
   const cycleCardColor = useStore((s) => s.cycleCardColor)
   const moveCard = useStore((s) => s.moveCard)
   const removeCard = useStore((s) => s.removeCard)
@@ -19,6 +26,7 @@ export function Board(): JSX.Element {
   const aiKey = useStore((s) => s.settings.aiApiKey)
   const runAi = useStore((s) => s.runAi)
 
+  const [byPart, setByPart] = useState(false)
   const canvasRef = useRef<HTMLDivElement>(null)
   const dragRef = useRef<{ id: string; offsetX: number; offsetY: number } | null>(null)
   const [live, setLive] = useState<{ id: string; x: number; y: number } | null>(null)
@@ -69,11 +77,39 @@ export function Board(): JSX.Element {
   const posOf = (card: Card): { x: number; y: number } =>
     live && live.id === card.id ? { x: live.x, y: live.y } : { x: card.x, y: card.y }
 
+  // A compact "which part of the paper does this belong to" picker.
+  const SectionSelect = ({ card }: { card: Card }): JSX.Element => (
+    <select
+      className="card-section"
+      value={card.section ?? ''}
+      aria-label="Which part of the paper this idea belongs to"
+      onPointerDown={(e) => e.stopPropagation()}
+      onClick={(e) => e.stopPropagation()}
+      onChange={(e) => updateCardSection(card.id, e.target.value || undefined)}
+    >
+      <option value="">Unsorted</option>
+      {sections.map((s) => (
+        <option key={s.id} value={s.id}>
+          {s.label}
+        </option>
+      ))}
+    </select>
+  )
+
   return (
     <section className="board" data-testid="board" aria-label="Planning board">
       <div className="board-bar">
         <button className="primary" data-testid="add-card" onClick={() => addCard('')}>
           + Add card
+        </button>
+        <button
+          className={'ghost' + (byPart ? ' active' : '')}
+          data-testid="board-view-toggle"
+          aria-pressed={byPart}
+          onClick={() => setByPart((v) => !v)}
+          title="Switch between a free corkboard and columns by part of the paper"
+        >
+          {byPart ? '🧩 Free board' : '▤ By part'}
         </button>
         {aiConfigured && (
           <div className="board-ai">
@@ -98,7 +134,11 @@ export function Board(): JSX.Element {
             </button>
           </div>
         )}
-        <span className="board-hint muted">Drag cards to arrange them; send the keepers to your outline.</span>
+        <span className="board-hint muted">
+          {byPart
+            ? 'Sort each idea into the part of the paper it belongs to.'
+            : 'Drag cards to arrange them; send the keepers to your outline.'}
+        </span>
       </div>
 
       {aiError && (
@@ -107,63 +147,116 @@ export function Board(): JSX.Element {
         </p>
       )}
 
-      <div className="board-canvas" ref={canvasRef} data-testid="board-canvas">
-        {cards.length === 0 && (
-          <p className="board-empty muted">
-            Your board is empty. Add a card, or brainstorm a topic, then drag the ideas into an order
-            that makes sense to you.
-          </p>
-        )}
-        {cards.map((card) => {
-          const p = posOf(card)
-          return (
-            <div
-              key={card.id}
-              className={'card card-' + card.color}
-              data-testid="board-card"
-              style={{ left: p.x, top: p.y }}
-            >
-              <div
-                className="card-handle"
-                onPointerDown={(e) => onPointerDown(e, card)}
-                onPointerMove={onPointerMove}
-                onPointerUp={onPointerUp}
-                aria-label="Drag to move card"
-                title="Drag to move"
-              >
-                <button
-                  className="card-color"
-                  onPointerDown={(e) => e.stopPropagation()}
-                  onClick={() => cycleCardColor(card.id)}
-                  aria-label="Change colour"
-                  title="Change colour"
-                >
-                  ●
-                </button>
-                <button
-                  className="card-remove"
-                  onPointerDown={(e) => e.stopPropagation()}
-                  onClick={() => removeCard(card.id)}
-                  aria-label="Delete card"
-                  title="Delete card"
-                >
-                  ×
-                </button>
+      {byPart ? (
+        <div className="board-columns" data-testid="board-columns">
+          {[...sections, { id: '', label: 'Unsorted' }].map((col) => {
+            const colCards = cards.filter((c) => (c.section ?? '') === col.id)
+            return (
+              <div className="board-column" key={col.id || 'unsorted'} data-testid="board-column">
+                <div className="board-column-head">
+                  <span>{col.label}</span>
+                  <span className="board-column-count">{colCards.length}</span>
+                </div>
+                <div className="board-column-body">
+                  {colCards.length === 0 && (
+                    <p className="muted small">What goes in “{col.label}”?</p>
+                  )}
+                  {colCards.map((card) => (
+                    <div className={'lane-card card-' + card.color} key={card.id} data-testid="board-card">
+                      <textarea
+                        className="card-text"
+                        value={card.text}
+                        placeholder="Write an idea…"
+                        aria-label="Card text"
+                        onChange={(e) => updateCardText(card.id, e.target.value)}
+                      />
+                      <div className="lane-card-foot">
+                        <SectionSelect card={card} />
+                        <button className="card-to-outline" onClick={() => sendCardToOutline(card.id)}>
+                          → Outline
+                        </button>
+                        <button
+                          className="card-remove"
+                          onClick={() => removeCard(card.id)}
+                          aria-label="Delete card"
+                          title="Delete card"
+                        >
+                          ×
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
-              <textarea
-                className="card-text"
-                value={card.text}
-                placeholder="Write an idea…"
-                aria-label="Card text"
-                onChange={(e) => updateCardText(card.id, e.target.value)}
-              />
-              <button className="card-to-outline" onClick={() => sendCardToOutline(card.id)}>
-                → Outline
-              </button>
-            </div>
-          )
-        })}
-      </div>
+            )
+          })}
+        </div>
+      ) : (
+        <div className="board-canvas" ref={canvasRef} data-testid="board-canvas">
+          {cards.length === 0 && (
+            <p className="board-empty muted">
+              Your board is empty. Add a card, or brainstorm a topic, then drag the ideas into an
+              order that makes sense to you.
+            </p>
+          )}
+          {cards.map((card) => {
+            const p = posOf(card)
+            return (
+              <div
+                key={card.id}
+                className={'card card-' + card.color}
+                data-testid="board-card"
+                style={{ left: p.x, top: p.y }}
+              >
+                <div
+                  className="card-handle"
+                  onPointerDown={(e) => onPointerDown(e, card)}
+                  onPointerMove={onPointerMove}
+                  onPointerUp={onPointerUp}
+                  aria-label="Drag to move card"
+                  title="Drag to move"
+                >
+                  <button
+                    className="card-color"
+                    onPointerDown={(e) => e.stopPropagation()}
+                    onClick={() => cycleCardColor(card.id)}
+                    aria-label="Change colour"
+                    title="Change colour"
+                  >
+                    ●
+                  </button>
+                  <button
+                    className="card-remove"
+                    onPointerDown={(e) => e.stopPropagation()}
+                    onClick={() => removeCard(card.id)}
+                    aria-label="Delete card"
+                    title="Delete card"
+                  >
+                    ×
+                  </button>
+                </div>
+                <textarea
+                  className="card-text"
+                  value={card.text}
+                  placeholder="Write an idea…"
+                  aria-label="Card text"
+                  onChange={(e) => updateCardText(card.id, e.target.value)}
+                />
+                <div className="card-foot">
+                  <SectionSelect card={card} />
+                  <button
+                    className="card-to-outline"
+                    onClick={() => sendCardToOutline(card.id)}
+                    title="Add this idea to your outline, under its part"
+                  >
+                    → Outline
+                  </button>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
     </section>
   )
 }

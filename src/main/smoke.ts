@@ -144,11 +144,27 @@ const PROBE = `(async () => {
   (await waitFor('[data-testid="tab-clarity"]', 'clarity tab (configured)')).click();
   await waitFor('[data-testid="ai-helper"]', 'AI helper appears once a key is set');
 
-  // Visual planning board: toggle in, add a card, then return to writing.
+  // Visual planning board: toggle in, add a card, sort it into a part of the paper.
   (await waitFor('[data-testid="board-toggle"]', 'board toggle')).click();
   await waitFor('[data-testid="board"]', 'planning board');
   (await waitFor('[data-testid="add-card"]', 'add card button')).click();
   setValue(await waitFor('[data-testid="board-card"] .card-text', 'a card on the board'), 'a planned idea');
+
+  // Assign the card to a top-level outline section via the picker.
+  const sectionSelect = await waitFor('[data-testid="board-card"] .card-section', 'card section picker');
+  const realOption = sectionSelect.querySelector('option[value]:not([value=""])');
+  if (!realOption) throw new Error('section picker had no outline sections');
+  sectionSelect.value = realOption.value;
+  sectionSelect.dispatchEvent(new Event('change', { bubbles: true }));
+
+  // "By part" view groups cards into columns; the sorted card lands in one.
+  (await waitFor('[data-testid="board-view-toggle"]', 'by-part toggle')).click();
+  await waitFor('[data-testid="board-columns"]', 'board columns by part');
+  if (!document.querySelector('[data-testid="board-column"]')) throw new Error('no part columns rendered');
+  if (!document.querySelector('[data-testid="board-column"] [data-testid="board-card"]')) {
+    throw new Error('sorted card did not appear in a column');
+  }
+
   (await waitFor('[data-testid="board-toggle"]', 'board toggle back')).click();
   await waitFor('[data-testid="editor"]', 'back to the editor');
 

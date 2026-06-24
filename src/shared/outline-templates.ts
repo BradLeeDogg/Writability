@@ -137,6 +137,34 @@ export function makeOutline(essayType: EssayType): OutlineNode[] {
   return (BUILDERS[essayType] ?? argumentOutline)()
 }
 
+/** A free-form note carrying a student's idea (e.g. a board card promoted to the outline). */
+export function makeNote(text: string): OutlineNode {
+  return { id: uid('node'), kind: 'note', label: 'Note', prompt: '', text, done: false, children: [] }
+}
+
+/**
+ * Append a note to a section. If `parentId` matches a top-level node the note
+ * becomes its child (so the idea lands under the part of the paper it belongs
+ * to); otherwise it is added at the end as a top-level note.
+ */
+export function insertNoteUnder(
+  nodes: OutlineNode[],
+  parentId: string | undefined,
+  text: string
+): OutlineNode[] {
+  const note = makeNote(text)
+  if (parentId) {
+    let found = false
+    const next = nodes.map((n) => {
+      if (n.id !== parentId) return n
+      found = true
+      return { ...n, children: [...n.children, note] }
+    })
+    if (found) return next
+  }
+  return [...nodes, note]
+}
+
 /** The thesis-like step (always the first node in every template). */
 export function findThesisNode(nodes: OutlineNode[]): OutlineNode | undefined {
   return nodes.find((n) => n.kind === 'thesis')

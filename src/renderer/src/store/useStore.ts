@@ -3,7 +3,7 @@ import { applySettings } from '../lib/theme'
 import { decodeAssignment } from '@shared/assignment'
 import { splitIntoItems } from '@shared/ai'
 import { uid } from '@shared/ids'
-import { makeBodyParagraph, nextBodyParagraphNumber } from '@shared/outline-templates'
+import { insertNoteUnder, makeBodyParagraph, nextBodyParagraphNumber } from '@shared/outline-templates'
 import type { AiRunInput, AiRunResult, BackupResult, ExportResult, RestoreResult } from '@shared/api'
 import { CARD_COLORS, DEFAULT_SETTINGS } from '@shared/types'
 import type {
@@ -68,6 +68,7 @@ interface StoreState {
   addCard: (text?: string) => void
   addCardsFromText: (text: string) => void
   updateCardText: (id: string, text: string) => void
+  updateCardSection: (id: string, section: string | undefined) => void
   cycleCardColor: (id: string) => void
   moveCard: (id: string, x: number, y: number) => void
   removeCard: (id: string) => void
@@ -261,16 +262,7 @@ export const useStore = create<StoreState>()((set, get) => {
       const cur = get().current
       const trimmed = text.trim()
       if (!cur || !trimmed) return
-      const note: OutlineNode = {
-        id: uid('node'),
-        kind: 'note',
-        label: 'Note',
-        prompt: '',
-        text: trimmed,
-        done: false,
-        children: []
-      }
-      patchContent({ outline: [...cur.content.outline, note] })
+      patchContent({ outline: insertNoteUnder(cur.content.outline, undefined, trimmed) })
     },
 
     removeOutlineNode(id) {
@@ -318,6 +310,14 @@ export const useStore = create<StoreState>()((set, get) => {
       patchContent({ cards: cur.content.cards.map((c) => (c.id === id ? { ...c, text } : c)) })
     },
 
+    updateCardSection(id, section) {
+      const cur = get().current
+      if (!cur) return
+      patchContent({
+        cards: cur.content.cards.map((c) => (c.id === id ? { ...c, section } : c))
+      })
+    },
+
     cycleCardColor(id) {
       const cur = get().current
       if (!cur) return
@@ -348,7 +348,10 @@ export const useStore = create<StoreState>()((set, get) => {
       const cur = get().current
       if (!cur) return
       const card = cur.content.cards.find((c) => c.id === id)
-      if (card) get().addOutlineNote(card.text)
+      const trimmed = card?.text.trim()
+      if (!card || !trimmed) return
+      // Land the idea under the part of the paper it was sorted into (if any).
+      patchContent({ outline: insertNoteUnder(cur.content.outline, card.section, trimmed) })
     },
 
     addSource(source) {
