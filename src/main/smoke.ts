@@ -109,6 +109,12 @@ const PROBE = `(async () => {
   await waitFor('[data-testid="clarity-panel"]', 'clarity panel');
   await waitFor('[data-testid="ai-helper-off"]', 'AI helper hidden until a key is set');
 
+  // Arrow keys move between tabs (ARIA tablist keyboard model).
+  q('[data-testid="tab-clarity"]').dispatchEvent(
+    new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true })
+  );
+  await waitFor('[data-testid="citations-panel"]', 'ArrowRight moves to the next tab');
+
   (await waitFor('[data-testid="tab-citations"]', 'citations tab')).click();
   await waitFor('[data-testid="citations-panel"]', 'citations panel');
 

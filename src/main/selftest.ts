@@ -348,6 +348,16 @@ export async function runSelftest(): Promise<void> {
     saveSettings(baseSettings)
     pass('AI (opt-in, mocked)')
 
+    // --- heuristic edge cases (robustness on empty / sparse input) ------
+    assert.equal(analyzeClarity('').wordCount, 0, 'empty text has zero words')
+    assert.equal(analyzeClarity('').issues.length, 0, 'empty text raises no clarity flags')
+    const oneLine = summarizeSource('A single clear sentence about cats.')
+    assert.equal(oneLine.keySentences.length, 1, 'one-sentence source yields one key sentence')
+    assert.equal(oneLine.mainClaim, 'A single clear sentence about cats.', 'main claim is that sentence')
+    const sparseCite = formatCitation({ id: 'z', type: 'website', authors: [], title: 'Untitled' }, 'mla')
+    assert.equal(typeof sparseCite.reference, 'string', 'a sparse citation formats without throwing')
+    pass('heuristic edge cases')
+
     // --- cleanup --------------------------------------------------------
     deletePaper(paper.meta.id)
     assert.equal(openPaper(paper.meta.id), null, 'paper deleted')
