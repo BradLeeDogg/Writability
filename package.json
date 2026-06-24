@@ -6,6 +6,10 @@
     "name": "Writability"
   },
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/BradLeeDogg/Writability.git"
+  },
   "main": "./out/main/index.js",
   "scripts": {
     "dev": "electron-vite dev",

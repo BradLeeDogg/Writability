@@ -43,13 +43,21 @@ nsis:
 portable:
   artifactName: ${productName}-${version}-${arch}-portable.${ext}
 
-# macOS / Linux targets are backlog; defined minimally so the config is valid
-# if the build host changes later.
+# macOS: unsigned dmg + zip for both Apple Silicon and Intel. Signing/notarizing
+# needs an Apple Developer certificate, which CI doesn't have, so identity is
+# forced off; Gatekeeper users right-click → Open the first time.
 mac:
   category: public.app-category.education
+  identity: null
   target:
-    - dmg
-    - zip
+    - target: dmg
+      arch: [arm64, x64]
+    - target: zip
+      arch: [arm64, x64]
+  artifactName: ${productName}-${version}-${arch}.${ext}
+
+dmg:
+  artifactName: ${productName}-${version}-${arch}.${ext}
 
 linux:
   category: Office

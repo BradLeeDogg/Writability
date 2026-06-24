@@ -1,0 +1,72 @@
+name: Build macOS
+
+on:
+  push:
+    branches:
+      - claude/gracious-wozniak-nm9540
+    paths-ignore:
+      - '**.md'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-mac:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # Installs deps and rebuilds better-sqlite3 for Electron's ABI via the
+      # postinstall (electron-builder install-app-deps).
+      - name: Install dependencies
+        run: npm install
+
+      - name: Type-check
+        run: npm run typecheck
+
+      - name: Build (main / preload / renderer)
+        run: npm run build
+
+      # Unsigned build: disable auto-discovery of any signing identity so the
+      # dmg/zip are produced without an Apple certificate.
+      - name: Package macOS installers (unsigned)
+        run: npx electron-builder --mac --publish never
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: writability-macos
+          path: |
+            release/*.dmg
+            release/*.zip
+          if-no-files-found: error
+
+      # Publish to a rolling "mac-latest" release for stable download links.
+      - name: Publish to mac-latest release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: mac-latest
+          name: Writability (latest macOS build)
+          body: |
+            Automated macOS build from `claude/gracious-wozniak-nm9540`.
+
+            Unsigned build — macOS Gatekeeper will warn. Right-click the app and
+            choose **Open**, then confirm, to run it the first time.
+
+            - **Apple Silicon (M1/M2/M3):** `Writability-*-arm64.dmg`
+            - **Intel:** `Writability-*-x64.dmg`
+            - Zips are also attached for either architecture.
+          files: |
+            release/*.dmg
+            release/*.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
