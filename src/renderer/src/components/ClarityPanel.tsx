@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
 import { useStore } from '../store/useStore'
+import { AiHelper } from './AiHelper'
 import { analyzeClarity } from '@shared/clarity'
 import { docToPlainText } from '@shared/doc'
 import type { ClarityIssueType } from '@shared/types'
@@ -81,6 +82,8 @@ export function ClarityPanel(): JSX.Element {
           )
         })
       )}
+
+      <AiHelper />
     </div>
   )
 }

@@ -1,4 +1,5 @@
 import { useStore } from '../store/useStore'
+import { AI_MODELS } from '@shared/ai'
 import type { FontChoice, OverlayTint, ThemeName } from '@shared/types'
 
 const THEMES: { value: ThemeName; label: string }[] = [
@@ -221,6 +222,48 @@ export function SettingsPanel(): JSX.Element {
         <button className="ghost block" onClick={replayWelcome}>
           Show the welcome guide again
         </button>
+      </fieldset>
+
+      <fieldset className="setting">
+        <legend>AI help (optional)</legend>
+        <p className="muted">
+          Writability works fully offline. If you’d like optional AI help, paste your own Claude API
+          key below. It’s stored only on this computer, and your writing is sent to Anthropic{' '}
+          <strong>only when you press an AI button</strong> — never automatically. Leave this blank
+          to keep Writability completely offline.
+        </p>
+        <label className="field">
+          <span>Claude API key</span>
+          <input
+            type="password"
+            data-testid="ai-key"
+            autoComplete="off"
+            placeholder="sk-ant-…"
+            value={settings.aiApiKey ?? ''}
+            onChange={(e) => update({ aiApiKey: e.target.value })}
+          />
+        </label>
+        <label className="field">
+          <span>Model</span>
+          <select
+            data-testid="ai-model"
+            value={settings.aiModel}
+            onChange={(e) => update({ aiModel: e.target.value })}
+          >
+            {AI_MODELS.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.label} — {m.note}
+              </option>
+            ))}
+          </select>
+        </label>
+        <p className="muted">
+          You can get a key from{' '}
+          <a href="https://console.anthropic.com/" target="_blank" rel="noreferrer">
+            console.anthropic.com
+          </a>
+          . Usage is billed to your own Anthropic account.
+        </p>
       </fieldset>
     </div>
   )

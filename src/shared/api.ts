@@ -8,6 +8,7 @@
 // Pure, side-effect-free helpers (clarity analysis, citation formatting) live
 // in shared/ and are imported directly by the renderer — they need no IPC.
 
+import type { AiTask } from './ai'
 import type {
   AppSettings,
   EssayType,
@@ -63,6 +64,19 @@ export interface RestoreResult {
   error?: string
 }
 
+export interface AiRunInput {
+  task: AiTask
+  text: string
+}
+
+export interface AiRunResult {
+  ok: boolean
+  /** The model's reply (rewrite or tone note) on success. */
+  text?: string
+  /** A friendly, plain-language error when something goes wrong. */
+  error?: string
+}
+
 export interface AppInfo {
   version: string
   dataDir: string
@@ -90,6 +104,11 @@ export interface WritabilityApi {
   createBackup(): Promise<BackupResult>
   /** Read a backup file and bring its papers (and settings) back. */
   restoreBackup(): Promise<RestoreResult>
+
+  // AI (opt-in) -----------------------------------------------------------
+  /** Run an opt-in AI task with the student's own key. Offline-safe: returns a
+   *  friendly error if no key is set. Never called unless the student clicks. */
+  runAi(input: AiRunInput): Promise<AiRunResult>
 
   // Misc ------------------------------------------------------------------
   getAppInfo(): Promise<AppInfo>

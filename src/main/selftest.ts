@@ -6,7 +6,9 @@ import { createPaper, deletePaper, listPapers, openPaper, savePaper } from './se
 import { getSettings, saveSettings } from './services/settings'
 import { renderExport } from './services/export'
 import { applyBundle, buildBundle } from './services/backup'
+import { runAiTask } from './services/ai'
 import { dataDir } from './services/paths'
+import { buildPrompt, isValidModel } from '@shared/ai'
 import { analyzeClarity, suggestSentenceSplit } from '@shared/clarity'
 import { decodeAssignment } from '@shared/assignment'
 import { outlineToDocContent } from '@shared/scaffold'
@@ -313,6 +315,38 @@ export async function runSelftest(): Promise<void> {
     assert.throws(() => applyBundle({} as never), 'a non-backup object is rejected')
     deletePaper(bkPaper.meta.id)
     pass('backup round-trip')
+
+    // --- AI (opt-in, fully mocked — no network) -------------------------
+    assert.ok(isValidModel('claude-opus-4-8') && !isValidModel('nope'), 'AI model validation')
+    const paraPrompt = buildPrompt('paraphrase', 'My sentence.')
+    assert.ok(paraPrompt.system.length > 0 && paraPrompt.user === 'My sentence.', 'paraphrase prompt')
+    assert.ok(/tone/i.test(buildPrompt('tone', 'x').system), 'tone prompt mentions tone')
+
+    // With no key configured, the task short-circuits to a friendly message.
+    const noKey = await runAiTask({ task: 'paraphrase', text: 'Hello.' }, async () => 'unused')
+    assert.ok(!noKey.ok && /key/i.test(noKey.error ?? ''), 'no key yields a friendly error')
+
+    // With a key + an injected completer, exercise the happy path offline.
+    const baseSettings = getSettings()
+    saveSettings({ ...baseSettings, aiApiKey: 'sk-test', aiModel: 'claude-haiku-4-5' })
+    let seen: { model?: string; user?: string } = {}
+    const good = await runAiTask({ task: 'paraphrase', text: 'i has a apple' }, async (args) => {
+      seen = args
+      return '  I have an apple.  '
+    })
+    assert.ok(good.ok && good.text === 'I have an apple.', 'AI success returns trimmed text')
+    assert.equal(seen.model, 'claude-haiku-4-5', 'completer gets the chosen model')
+    assert.ok((seen.user ?? '').includes('apple'), 'completer gets the student text')
+
+    const unauthorized = await runAiTask({ task: 'tone', text: 'hello' }, async () => {
+      throw Object.assign(new Error('nope'), { status: 401 })
+    })
+    assert.ok(!unauthorized.ok && /key/i.test(unauthorized.error ?? ''), '401 maps to check-your-key')
+
+    const blank = await runAiTask({ task: 'paraphrase', text: '   ' }, async () => 'x')
+    assert.ok(!blank.ok, 'blank input is rejected before any call')
+    saveSettings(baseSettings)
+    pass('AI (opt-in, mocked)')
 
     // --- cleanup --------------------------------------------------------
     deletePaper(paper.meta.id)

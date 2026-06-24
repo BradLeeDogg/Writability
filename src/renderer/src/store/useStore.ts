@@ -3,7 +3,7 @@ import { applySettings } from '../lib/theme'
 import { decodeAssignment } from '@shared/assignment'
 import { uid } from '@shared/ids'
 import { makeBodyParagraph, nextBodyParagraphNumber } from '@shared/outline-templates'
-import type { BackupResult, ExportResult, RestoreResult } from '@shared/api'
+import type { AiRunInput, AiRunResult, BackupResult, ExportResult, RestoreResult } from '@shared/api'
 import { DEFAULT_SETTINGS } from '@shared/types'
 import type {
   AppSettings,
@@ -86,6 +86,9 @@ interface StoreState {
   // onboarding
   dismissWelcome: () => void
   replayWelcome: () => void
+
+  // ai (opt-in)
+  runAi: (input: AiRunInput) => Promise<AiRunResult>
 }
 
 // --- debounce timers (module scope so they survive re-renders) -------------
@@ -392,6 +395,10 @@ export const useStore = create<StoreState>()((set, get) => {
 
     replayWelcome() {
       get().updateSettings({ onboarded: false })
+    },
+
+    async runAi(input) {
+      return window.api.runAi(input)
     }
   }
 })

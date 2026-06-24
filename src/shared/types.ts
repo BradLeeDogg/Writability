@@ -131,6 +131,14 @@ export interface AppSettings {
   showClarity: boolean
   /** Has the student seen the first-run welcome guide? */
   onboarded: boolean
+  /**
+   * Optional Claude API key for the opt-in AI features. Stored locally on this
+   * computer only; the student's writing is sent to Anthropic *only* when they
+   * click an AI button. Empty/undefined means Writability stays fully offline.
+   */
+  aiApiKey?: string
+  /** Which Claude model the AI features use. */
+  aiModel: string
   /** Id of the last paper opened, so we can restore it on launch. */
   lastPaperId?: string
 }
@@ -151,7 +159,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   overlayTint: 'none',
   ttsRate: 1,
   showClarity: true,
-  onboarded: false
+  onboarded: false,
+  aiModel: 'claude-opus-4-8'
 }
 
 // ---------------------------------------------------------------------------

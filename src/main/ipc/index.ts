@@ -3,8 +3,9 @@ import * as papers from '../services/papers'
 import * as settings from '../services/settings'
 import { exportPaper } from '../services/export'
 import { createBackup, restoreBackup } from '../services/backup'
+import { runAiTask } from '../services/ai'
 import { dataDir } from '../services/paths'
-import type { CreatePaperInput, ExportInput, SavePaperInput } from '@shared/api'
+import type { AiRunInput, CreatePaperInput, ExportInput, SavePaperInput } from '@shared/api'
 import type { AppSettings } from '@shared/types'
 
 // The main-process half of the IPC triad. Each channel here has a matching
@@ -27,6 +28,9 @@ export function registerIpc(): void {
   // Backup ----------------------------------------------------------------
   ipcMain.handle('backup:create', () => createBackup())
   ipcMain.handle('backup:restore', () => restoreBackup())
+
+  // AI (opt-in) -----------------------------------------------------------
+  ipcMain.handle('ai:run', (_e, input: AiRunInput) => runAiTask(input))
 
   // Misc ------------------------------------------------------------------
   ipcMain.handle('app:info', () => ({

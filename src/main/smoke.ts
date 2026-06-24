@@ -107,6 +107,7 @@ const PROBE = `(async () => {
   // Tools panel tabs.
   (await waitFor('[data-testid="tab-clarity"]', 'clarity tab')).click();
   await waitFor('[data-testid="clarity-panel"]', 'clarity panel');
+  await waitFor('[data-testid="ai-helper-off"]', 'AI helper hidden until a key is set');
 
   (await waitFor('[data-testid="tab-citations"]', 'citations tab')).click();
   await waitFor('[data-testid="citations-panel"]', 'citations panel');
@@ -118,6 +119,10 @@ const PROBE = `(async () => {
   await waitFor('[data-testid="backup-create"]', 'backup button');
   await waitFor('[data-testid="backup-restore"]', 'restore button');
 
+  // Opt-in AI controls render; set a dummy key to reveal the helper (no call is made).
+  await waitFor('[data-testid="ai-model"]', 'AI model select');
+  setValue(await waitFor('[data-testid="ai-key"]', 'AI key input'), 'sk-ant-smoke-test');
+
   // Calm & comprehension: underline academic terms, then spotlight the paragraph.
   (await waitFor('[data-testid="toggle-define"]', 'define-terms toggle')).click();
   await waitFor('.prose .pm-glossary', 'academic terms underlined in the prose');
@@ -128,6 +133,10 @@ const PROBE = `(async () => {
   const themeBtn = q('[data-testid="theme-calm-dark"]');
   if (themeBtn) themeBtn.click();
   await sleep(100);
+
+  // With a key configured, the opt-in AI helper now appears in the Clarity panel.
+  (await waitFor('[data-testid="tab-clarity"]', 'clarity tab (configured)')).click();
+  await waitFor('[data-testid="ai-helper"]', 'AI helper appears once a key is set');
 
   return 'WP_SMOKE_OK';
 })()`

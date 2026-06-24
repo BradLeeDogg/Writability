@@ -18,6 +18,8 @@ const api: WritabilityApi = {
   createBackup: () => ipcRenderer.invoke('backup:create'),
   restoreBackup: () => ipcRenderer.invoke('backup:restore'),
 
+  runAi: (input) => ipcRenderer.invoke('ai:run', input),
+
   getAppInfo: () => ipcRenderer.invoke('app:info')
 }
 

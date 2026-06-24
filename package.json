@@ -21,6 +21,7 @@
     "dist:win": "electron-vite build && electron-builder --win --publish never"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.105.0",
     "@fontsource/atkinson-hyperlegible": "^5.2.8",
     "@fontsource/opendyslexic": "^5.2.5",
     "better-sqlite3": "^11.10.0",
