@@ -16,8 +16,10 @@ import { TRANSITIONS } from '@shared/transitions'
 import { GLOSSARY, glossaryMap } from '@shared/glossary'
 import { summarizeSource } from '@shared/reading'
 import { formatCitation } from '@shared/citations'
-import { docToPlainText, splitSentences, sentenceIndexAt } from '@shared/doc'
+import { docToPlainText, splitSentences, sentenceIndexAt, splitWords, wordIndexAt } from '@shared/doc'
 import { coachContext } from '@shared/coach'
+import { pickVoice, sortVoices } from '@shared/voices'
+import { applyCase, confusableFor, looksLikeWord, rankSuggestions } from '@shared/spelling'
 import {
   findThesisNode,
   insertNoteUnder,
@@ -382,6 +384,52 @@ export async function runSelftest(): Promise<void> {
     assert.deepEqual(splitSentences(''), [], 'empty text yields no sentences')
     assert.equal(splitSentences('A fragment with no end').length, 1, 'a fragment is one sentence')
     pass('read-aloud sentence splitting')
+
+    // --- read-aloud word splitting (pure, for karaoke highlighting) -----
+    const words = splitWords('The cat sat.\n\nIt purred.')
+    assert.equal(words.length, 5, 'words are non-whitespace runs across breaks')
+    assert.equal(words[0].text, 'The')
+    assert.equal(words[2].text, 'sat.', 'trailing punctuation stays on the word')
+    assert.equal(words[0].start, 0)
+    assert.equal(words[1].start, 4, 'words carry source offsets')
+    assert.equal(wordIndexAt(words, 5), 1, 'an offset inside the second word maps to it')
+    assert.equal(wordIndexAt(words, 0), 0, 'offset 0 maps to the first word')
+    assert.deepEqual(splitWords('   '), [], 'whitespace-only yields no words')
+    pass('read-aloud word splitting')
+
+    // --- read-aloud voice selection (pure) ------------------------------
+    const voiceList = [
+      { voiceURI: 'fr1', name: 'Thomas', lang: 'fr-FR', localService: true },
+      { voiceURI: 'en2', name: 'Zira', lang: 'en-US', localService: false },
+      { voiceURI: 'en1', name: 'David', lang: 'en-US', localService: true }
+    ]
+    const ordered = sortVoices(voiceList)
+    assert.equal(ordered[0].name, 'David', 'English + offline voice sorts first')
+    assert.equal(ordered[1].name, 'Zira', 'English (remote) comes next')
+    assert.equal(ordered[2].name, 'Thomas', 'non-English voice sorts last')
+    assert.equal(pickVoice(voiceList, 'en2')?.name, 'Zira', 'pick by voiceURI')
+    assert.equal(pickVoice(voiceList, 'David')?.name, 'David', 'fall back to a name match')
+    assert.equal(pickVoice(voiceList, 'nope'), undefined, 'unknown preference uses engine default')
+    assert.equal(pickVoice([], 'en1'), undefined, 'no voices -> engine default')
+    pass('read-aloud voice selection')
+
+    // --- gentle spelling helpers (pure) ---------------------------------
+    assert.equal(looksLikeWord('because'), true, 'a normal word is checkable')
+    assert.equal(looksLikeWord('I'), false, 'single letters are skipped')
+    assert.equal(looksLikeWord('NASA'), false, 'acronyms are skipped')
+    assert.equal(looksLikeWord('cat5'), false, 'words with digits are skipped')
+    assert.equal(looksLikeWord("don't"), true, 'apostrophes are allowed')
+    const conf = confusableFor('There')
+    assert.ok(conf && conf.alternatives.includes('their'), 'confusable lookup is case-insensitive')
+    assert.ok(conf && conf.hint.length > 0, 'confusable carries a hint')
+    assert.equal(confusableFor('elephant'), undefined, 'non-confusable words return nothing')
+    const ranked = rankSuggestions('skool', ['school', 'skoal', 'dribble', 'stool'])
+    assert.equal(ranked[0], 'school', 'same-first-letter suggestions keep the dictionary order')
+    assert.equal(ranked[ranked.length - 1], 'dribble', 'a different first letter is de-prioritised')
+    assert.equal(applyCase('Becuase', 'because'), 'Because', 'capitalised words keep their capital')
+    assert.equal(applyCase('HELLO', 'hello'), 'HELLO', 'all-caps stays all-caps')
+    assert.equal(applyCase('cat', 'cats'), 'cats', 'lowercase stays lowercase')
+    pass('gentle spelling helpers')
 
     // --- promote board cards into outline sections (pure) ---------------
     const baseOutline = makeOutline('argument')

@@ -1,5 +1,8 @@
+import { useEffect, useState } from 'react'
 import { useStore } from '../store/useStore'
 import { AI_MODELS } from '@shared/ai'
+import { sortVoices } from '@shared/voices'
+import { listVoices, onVoicesChanged, speak } from '../lib/tts'
 import type { FontChoice, OverlayTint, ThemeName } from '@shared/types'
 
 const THEMES: { value: ThemeName; label: string }[] = [
@@ -30,6 +33,22 @@ export function SettingsPanel(): JSX.Element {
   const createBackup = useStore((s) => s.createBackup)
   const restoreBackup = useStore((s) => s.restoreBackup)
   const replayWelcome = useStore((s) => s.replayWelcome)
+
+  // Voices can arrive asynchronously after the page loads.
+  const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([])
+  useEffect(() => {
+    const load = (): void => setVoices(sortVoices(listVoices()))
+    load()
+    return onVoicesChanged(load)
+  }, [])
+
+  const previewVoice = (): void => {
+    speak('Hello — this is how the reading voice will sound.', {
+      rate: settings.ttsRate,
+      pitch: settings.ttsPitch,
+      voiceURI: settings.ttsVoice
+    })
+  }
 
   const onBackup = async (): Promise<void> => {
     const res = await createBackup()
@@ -181,11 +200,41 @@ export function SettingsPanel(): JSX.Element {
       <label className="toggle">
         <input
           type="checkbox"
+          data-testid="toggle-ruler"
+          checked={settings.readingRuler}
+          onChange={(e) => update({ readingRuler: e.target.checked })}
+        />
+        <span>Reading ruler (a tinted guide that follows your pointer)</span>
+      </label>
+
+      <label className="toggle">
+        <input
+          type="checkbox"
           data-testid="toggle-define"
           checked={settings.defineTerms}
           onChange={(e) => update({ defineTerms: e.target.checked })}
         />
         <span>Underline academic terms (hover to see a meaning)</span>
+      </label>
+
+      <label className="toggle">
+        <input
+          type="checkbox"
+          data-testid="toggle-spell"
+          checked={settings.spellHelp}
+          onChange={(e) => update({ spellHelp: e.target.checked })}
+        />
+        <span>Gentle spelling help (underline likely misspellings)</span>
+      </label>
+
+      <label className="toggle">
+        <input
+          type="checkbox"
+          data-testid="toggle-homophone"
+          checked={settings.homophoneHelp}
+          onChange={(e) => update({ homophoneHelp: e.target.checked })}
+        />
+        <span>Mark commonly-confused words (their/there, your/you’re…)</span>
       </label>
 
       <label className="toggle">
@@ -197,15 +246,56 @@ export function SettingsPanel(): JSX.Element {
         <span>Reduce motion</span>
       </label>
 
-      <Slider
-        label="Read-aloud speed"
-        value={settings.ttsRate}
-        min={0.6}
-        max={1.4}
-        step={0.1}
-        format={(v) => `${v.toFixed(1)}×`}
-        onChange={(v) => update({ ttsRate: v })}
-      />
+      <fieldset className="setting">
+        <legend>Read aloud</legend>
+        <p className="muted">
+          Pick a voice that feels comfortable to listen to. A lower pitch and a slower speed often
+          sound calmer. Press Preview to hear it.
+        </p>
+        {voices.length > 0 ? (
+          <label className="field">
+            <span>Voice</span>
+            <select
+              data-testid="tts-voice"
+              value={settings.ttsVoice ?? ''}
+              onChange={(e) => update({ ttsVoice: e.target.value || undefined })}
+            >
+              <option value="">System default</option>
+              {voices.map((v) => (
+                <option key={v.voiceURI} value={v.voiceURI}>
+                  {v.name} ({v.lang})
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : (
+          <p className="muted small" data-testid="tts-no-voices">
+            Your computer has only its built-in voice. You can add more voices (male, female, and
+            others) in your operating system’s speech settings.
+          </p>
+        )}
+        <Slider
+          label="Speed"
+          value={settings.ttsRate}
+          min={0.6}
+          max={1.4}
+          step={0.1}
+          format={(v) => `${v.toFixed(1)}×`}
+          onChange={(v) => update({ ttsRate: v })}
+        />
+        <Slider
+          label="Pitch"
+          value={settings.ttsPitch}
+          min={0.6}
+          max={1.4}
+          step={0.1}
+          format={(v) => v.toFixed(1)}
+          onChange={(v) => update({ ttsPitch: v })}
+        />
+        <button className="ghost block" data-testid="tts-preview" onClick={previewVoice}>
+          ▶ Preview voice
+        </button>
+      </fieldset>
 
       <fieldset className="setting">
         <legend>Your work</legend>

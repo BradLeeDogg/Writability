@@ -112,12 +112,41 @@ export function splitSentences(text: string): Sentence[] {
   return out
 }
 
-/** Which sentence contains a given source offset (the last one starting at/before it). */
-export function sentenceIndexAt(sentences: Sentence[], charIndex: number): number {
+/** A maximal run of non-whitespace, with its offsets in the source string. */
+export interface Word {
+  text: string
+  start: number
+  end: number
+}
+
+/** Split text into words (non-whitespace runs), keeping each word's offsets. */
+export function splitWords(text: string): Word[] {
+  const out: Word[] = []
+  if (!text) return out
+  const re = /\S+/g
+  let m: RegExpExecArray | null
+  while ((m = re.exec(text)) !== null) {
+    out.push({ text: m[0], start: m.index, end: m.index + m[0].length })
+  }
+  return out
+}
+
+/** Index of the span (sentence or word) that starts at/before a source offset. */
+function spanIndexAt(spans: { start: number }[], charIndex: number): number {
   let idx = 0
-  for (let k = 0; k < sentences.length; k++) {
-    if (sentences[k].start <= charIndex) idx = k
+  for (let k = 0; k < spans.length; k++) {
+    if (spans[k].start <= charIndex) idx = k
     else break
   }
   return idx
+}
+
+/** Which sentence contains a given source offset (the last one starting at/before it). */
+export function sentenceIndexAt(sentences: Sentence[], charIndex: number): number {
+  return spanIndexAt(sentences, charIndex)
+}
+
+/** Which word contains a given source offset (the last one starting at/before it). */
+export function wordIndexAt(words: Word[], charIndex: number): number {
+  return spanIndexAt(words, charIndex)
 }

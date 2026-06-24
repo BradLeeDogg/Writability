@@ -48,6 +48,8 @@
   --focus-ring: #2f6f8f;
   --danger: #a23b3b;
   --selection: #bfe0db;
+  --ruler-tint: rgba(255, 221, 120, 0.3);
+  --ruler-edge: rgba(170, 130, 20, 0.45);
 }
 
 /* Calm dark --------------------------------------------------------------- */
@@ -66,6 +68,8 @@
   --focus-ring: #7fc0e0;
   --danger: #e08585;
   --selection: #2f4f4a;
+  --ruler-tint: rgba(255, 255, 255, 0.1);
+  --ruler-edge: rgba(255, 255, 255, 0.28);
 }
 
 /* Sepia ------------------------------------------------------------------- */
@@ -84,6 +88,8 @@
   --focus-ring: #9a6a2b;
   --danger: #9c3a2a;
   --selection: #e6cf9a;
+  --ruler-tint: rgba(200, 150, 60, 0.22);
+  --ruler-edge: rgba(120, 80, 20, 0.5);
 }
 
 /* High contrast ----------------------------------------------------------- */
@@ -102,6 +108,8 @@
   --focus-ring: #ffd400;
   --danger: #ff8a80;
   --selection: #2b50ff;
+  --ruler-tint: rgba(255, 212, 0, 0.16);
+  --ruler-edge: rgba(255, 212, 0, 0.6);
 }
 
 /* Reading overlays (visual-stress tints applied to the editor surface) ---- */

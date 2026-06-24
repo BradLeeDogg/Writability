@@ -1,0 +1,18 @@
+[project]
+name = "agentic-ai"
+version = "0.1.0"
+description = "Minimal, extensible Claude-powered agent loop: LLM + tool calling + memory."
+requires-python = ">=3.10"
+dependencies = [
+    "anthropic>=0.69.0",
+]
+
+[project.scripts]
+agent = "agent.cli:main"
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["agent*"]

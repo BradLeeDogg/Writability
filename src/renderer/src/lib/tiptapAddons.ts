@@ -6,8 +6,11 @@
 
 import { Extension } from '@tiptap/core'
 import { Plugin, PluginKey } from '@tiptap/pm/state'
+import type { Node as PMNode } from '@tiptap/pm/model'
 import { Decoration, DecorationSet } from '@tiptap/pm/view'
 import { GLOSSARY, glossaryMap } from '@shared/glossary'
+import { confusableFor, looksLikeWord, normalizeWord } from '@shared/spelling'
+import { isMisspelled, spellReady } from './spell'
 
 // --- Spotlight: dim everything but the paragraph holding the cursor ---------
 export const spotlightKey = new PluginKey<boolean>('spotlight')
@@ -95,6 +98,93 @@ export const Glossary = Extension.create({
               return undefined
             })
             return DecorationSet.create(state.doc, decos)
+          }
+        }
+      })
+    ]
+  }
+})
+
+// --- Spellcheck: gentle underlines for likely misspellings ------------------
+// Offline (nspell). Optionally also marks commonly-confused words. Clicking a
+// mark is handled by the Editor (it reads this plugin's state to find the word
+// and its range). Never edits the document itself.
+export interface SpellState {
+  enabled: boolean
+  homophones: boolean
+  ignored: Set<string>
+  version: number
+}
+export const spellcheckKey = new PluginKey<SpellState>('spellcheck')
+
+const WORD_RE = /[A-Za-z][A-Za-z'’]*/g
+const MAX_SPELL_DECOS = 300
+
+function buildSpellDecorations(doc: PMNode, st: SpellState): DecorationSet {
+  const decos: Decoration[] = []
+  doc.descendants((node, pos) => {
+    if (!node.isText || !node.text) return
+    if (decos.length >= MAX_SPELL_DECOS) return false
+    const text = node.text
+    WORD_RE.lastIndex = 0
+    let m: RegExpExecArray | null
+    while ((m = WORD_RE.exec(text)) && decos.length < MAX_SPELL_DECOS) {
+      const w = m[0]
+      if (!looksLikeWord(w)) continue
+      const lower = normalizeWord(w).toLowerCase()
+      if (st.ignored.has(lower)) continue
+      const from = pos + m.index
+      const to = from + w.length
+      if (isMisspelled(w)) {
+        decos.push(Decoration.inline(from, to, { class: 'pm-misspelled' }, { word: w }))
+      } else if (st.homophones && confusableFor(w)) {
+        decos.push(Decoration.inline(from, to, { class: 'pm-confusable' }, { word: w }))
+      }
+    }
+    return undefined
+  })
+  return DecorationSet.create(doc, decos)
+}
+
+// Recompute only when the document or the relevant flags change (not on mere
+// selection moves), so typing stays smooth even on long papers.
+let spellCache: { doc: PMNode | null; key: string; set: DecorationSet } = {
+  doc: null,
+  key: '',
+  set: DecorationSet.empty
+}
+
+export const Spellcheck = Extension.create({
+  name: 'spellcheck',
+  addProseMirrorPlugins() {
+    return [
+      new Plugin<SpellState>({
+        key: spellcheckKey,
+        state: {
+          init: () => ({ enabled: false, homophones: false, ignored: new Set<string>(), version: 0 }),
+          apply(tr, value) {
+            const meta = tr.getMeta(spellcheckKey) as Partial<SpellState> & { ignore?: string }
+            if (!meta) return value
+            let next = value
+            if (typeof meta.enabled === 'boolean') next = { ...next, enabled: meta.enabled }
+            if (typeof meta.homophones === 'boolean') next = { ...next, homophones: meta.homophones }
+            if (meta.ignore) {
+              const ignored = new Set(next.ignored)
+              ignored.add(meta.ignore.toLowerCase())
+              next = { ...next, ignored, version: next.version + 1 }
+            }
+            return next
+          }
+        },
+        props: {
+          decorations(state) {
+            const st = spellcheckKey.getState(state)
+            if (!st || !st.enabled || !spellReady()) return DecorationSet.empty
+            const key = `${st.homophones}:${st.version}:${spellReady()}`
+            if (spellCache.doc === state.doc && spellCache.key === key) return spellCache.set
+            const set = buildSpellDecorations(state.doc, st)
+            spellCache = { doc: state.doc, key, set }
+            return set
           }
         }
       })

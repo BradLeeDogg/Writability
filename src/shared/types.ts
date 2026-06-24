@@ -135,8 +135,14 @@ export interface AppSettings {
   focusMode: boolean
   /** Spotlight the current paragraph and dim the rest (typewriter focus). */
   spotlightMode: boolean
+  /** A tinted reading guide band that follows the pointer across the page. */
+  readingRuler: boolean
   /** Underline known academic terms with a hover-to-define tooltip. */
   defineTerms: boolean
+  /** Gently underline likely misspellings and offer suggestions. */
+  spellHelp: boolean
+  /** Also mark commonly-confused words (their/there…) with a "which one?" hint. */
+  homophoneHelp: boolean
   /** Preferred length of a focus-timer work session, in minutes. */
   focusTimerMinutes: number
   /** Respect/force reduced motion. */
@@ -145,6 +151,10 @@ export interface AppSettings {
   overlayTint: OverlayTint
   /** Read-aloud speaking rate (0.6 – 1.4). */
   ttsRate: number
+  /** Read-aloud pitch (0.6 – 1.4); lower can feel calmer. */
+  ttsPitch: number
+  /** Preferred read-aloud voice (its voiceURI). Empty = the system default. */
+  ttsVoice?: string
   /** Show the clarity panel results. */
   showClarity: boolean
   /** Has the student seen the first-run welcome guide? */
@@ -171,11 +181,15 @@ export const DEFAULT_SETTINGS: AppSettings = {
   maxLineWidth: 68,
   focusMode: false,
   spotlightMode: false,
+  readingRuler: false,
   defineTerms: false,
+  spellHelp: true,
+  homophoneHelp: false,
   focusTimerMinutes: 25,
   reduceMotion: false,
   overlayTint: 'none',
   ttsRate: 1,
+  ttsPitch: 1,
   showClarity: true,
   onboarded: false,
   aiModel: 'claude-opus-4-8'

@@ -125,6 +125,9 @@ const PROBE = `(async () => {
   await waitFor('[data-testid="backup-create"]', 'backup button');
   await waitFor('[data-testid="backup-restore"]', 'restore button');
 
+  // Read-aloud voice controls (voice picker when available, plus a preview).
+  await waitFor('[data-testid="tts-preview"]', 'read-aloud voice preview');
+
   // Opt-in AI controls render; set a dummy key to reveal the helper (no call is made).
   await waitFor('[data-testid="ai-model"]', 'AI model select');
   setValue(await waitFor('[data-testid="ai-key"]', 'AI key input'), 'sk-ant-smoke-test');
@@ -134,6 +137,33 @@ const PROBE = `(async () => {
   await waitFor('.prose .pm-glossary', 'academic terms underlined in the prose');
   (await waitFor('[data-testid="toggle-spotlight"]', 'spotlight toggle')).click();
   await waitFor('.editor-surface.spotlight', 'spotlight mode applied');
+
+  // Reading ruler: enable it, then move the pointer over the page to reveal the band.
+  (await waitFor('[data-testid="toggle-ruler"]', 'reading-ruler toggle')).click();
+  await sleep(80);
+  const scroll = await waitFor('.editor-scroll', 'editor scroll area');
+  scroll.dispatchEvent(new MouseEvent('mousemove', { bubbles: true, clientX: 220, clientY: 240 }));
+  await waitFor('[data-testid="reading-ruler"]', 'reading ruler follows the pointer');
+
+  // Gentle spelling help: type a misspelling, see it flagged, fix it from the popover.
+  const prose = await waitFor('.prose', 'editor prose');
+  prose.focus();
+  document.execCommand('insertText', false, ' becuase ');
+  let flagged = null;
+  for (let i = 0; i < 80; i++) {
+    flagged = [...document.querySelectorAll('.pm-misspelled')].find((e) => e.textContent === 'becuase');
+    if (flagged) break;
+    await sleep(80);
+  }
+  if (!flagged) throw new Error('"becuase" was not flagged as a misspelling');
+  flagged.click();
+  await waitFor('[data-testid="spell-popover"]', 'spelling popover');
+  const because = [...document.querySelectorAll('[data-testid="spell-suggestion"]')].find((b) => b.textContent === 'because');
+  if (!because) throw new Error('no "because" suggestion was offered');
+  because.click();
+  await sleep(150);
+  if (q('.prose').textContent.includes('becuase')) throw new Error('misspelling still present after fix');
+  if (!q('.prose').textContent.includes('because')) throw new Error('correction was not applied');
 
   // Toggle a setting to exercise the live theming path.
   const themeBtn = q('[data-testid="theme-calm-dark"]');
@@ -153,6 +183,13 @@ const PROBE = `(async () => {
   // Visual planning board: toggle in, add a card, sort it into a part of the paper.
   (await waitFor('[data-testid="board-toggle"]', 'board toggle')).click();
   await waitFor('[data-testid="board"]', 'planning board');
+
+  // The brainstorm box can be seeded from the student's own work (no retyping).
+  (await waitFor('[data-testid="board-seed-assignment"]', 'board brainstorm seed chip')).click();
+  await sleep(50);
+  const boardInput = q('[data-testid="board-ai-input"]');
+  if (!boardInput || !boardInput.value.trim()) throw new Error('board seed chip did not fill the brainstorm box');
+
   (await waitFor('[data-testid="add-card"]', 'add card button')).click();
   setValue(await waitFor('[data-testid="board-card"] .card-text', 'a card on the board'), 'a planned idea');
 
@@ -171,14 +208,29 @@ const PROBE = `(async () => {
     throw new Error('sorted card did not appear in a column');
   }
 
+  // Drag the card from its column into "Unsorted" (the last column) and verify it moves.
+  const grip = await waitFor('[data-testid="card-grip"]', 'card drag grip');
+  const cols = [...document.querySelectorAll('[data-testid="board-column"]')];
+  const target = cols[cols.length - 1];
+  if (target.querySelector('[data-testid="board-card"]')) throw new Error('target column was not empty to start');
+  const dt = new DataTransfer();
+  grip.dispatchEvent(new DragEvent('dragstart', { bubbles: true, dataTransfer: dt }));
+  target.dispatchEvent(new DragEvent('dragover', { bubbles: true, dataTransfer: dt }));
+  target.dispatchEvent(new DragEvent('drop', { bubbles: true, dataTransfer: dt }));
+  await sleep(80);
+  if (!target.querySelector('[data-testid="board-card"]')) {
+    throw new Error('drag-to-sort did not move the card into the target column');
+  }
+
   (await waitFor('[data-testid="board-toggle"]', 'board toggle back')).click();
   await waitFor('[data-testid="editor"]', 'back to the editor');
 
-  // Immersive "Read to me": opens a reader that highlights sentences as it reads.
+  // Immersive "Read to me": opens a reader that highlights each word as it reads.
   (await waitFor('[data-testid="read-aloud"]', 'read-aloud button')).click();
   await waitFor('[data-testid="read-aloud-overlay"]', 'read-aloud overlay');
   await waitFor('[data-testid="reader-page"]', 'reader page');
   if (!document.querySelector('.reader-sentence')) throw new Error('reader rendered no sentences');
+  if (!document.querySelector('.reader-word[data-wi]')) throw new Error('reader rendered no words to highlight');
   (await waitFor('[data-testid="reader-close"]', 'reader close button')).click();
   await sleep(120);
   if (document.querySelector('[data-testid="read-aloud-overlay"]')) throw new Error('reader overlay did not close');

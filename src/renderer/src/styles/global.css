@@ -846,6 +846,27 @@ fieldset.field {
 .lane-card .card-remove {
   flex: 0 0 auto;
 }
+.lane-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 2px 4px 0;
+}
+.lane-grip {
+  cursor: grab;
+  color: rgba(0, 0, 0, 0.4);
+  font-size: 0.95rem;
+  line-height: 1;
+  user-select: none;
+  padding: 0 2px;
+}
+.lane-grip:active {
+  cursor: grabbing;
+}
+.board-column.drag-over {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 2px var(--accent);
+}
 
 /* Immersive "Read to me" overlay */
 .reader-overlay {
@@ -886,18 +907,27 @@ fieldset.field {
   color: var(--text);
 }
 .reader-sentence {
-  border-radius: 5px;
-  padding: 0 2px;
-  cursor: pointer;
+  border-radius: 6px;
   transition: background-color 0.15s ease;
 }
-.reader-sentence:hover {
+/* The line currently being read is gently tinted; the spoken word pops. */
+.reader-sentence.current {
   background: var(--surface-2);
+  box-shadow: 0 0 0 4px var(--surface-2);
 }
-.reader-sentence.active {
+.reader-word {
+  border-radius: 5px;
+  padding: 0 1px;
+  cursor: pointer;
+}
+.reader-word:hover {
+  background: var(--surface);
+  box-shadow: 0 0 0 2px var(--surface);
+}
+.reader-word.active {
   background: var(--accent);
   color: var(--accent-contrast);
-  box-shadow: 0 0 0 3px var(--accent);
+  box-shadow: 0 0 0 2px var(--accent);
 }
 .reader-note {
   text-align: center;
@@ -1095,6 +1125,74 @@ fieldset.field {
   flex: 1;
   overflow-y: auto;
   padding: 2rem 1.5rem 4rem;
+  position: relative;
+}
+/* Gentle spelling marks: soft wavy underlines, not harsh red squiggles. */
+.pm-misspelled {
+  text-decoration: underline wavy var(--danger);
+  text-decoration-skip-ink: none;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.pm-confusable {
+  text-decoration: underline dotted var(--accent);
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.spell-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+}
+.spell-pop {
+  position: fixed;
+  z-index: 41;
+  width: 250px;
+  max-width: 80vw;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: var(--shadow);
+  padding: 0.7rem;
+}
+.spell-word {
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 0.3rem;
+}
+.spell-hint {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  margin: 0 0 0.5rem;
+  line-height: 1.4;
+}
+.spell-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+.spell-suggestions .chip {
+  font-size: 0.9rem;
+  color: var(--text);
+}
+.spell-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 0.5rem;
+}
+
+/* Reading guide band that tracks the pointer (see Editor.tsx). */
+.reading-ruler {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 1.9em;
+  transform: translateY(-50%);
+  background: var(--ruler-tint);
+  border-top: 1px solid var(--ruler-edge);
+  border-bottom: 1px solid var(--ruler-edge);
+  pointer-events: none;
+  z-index: 4;
 }
 .editor-surface {
   max-width: var(--max-line-width);
