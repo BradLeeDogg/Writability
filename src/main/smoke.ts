@@ -195,11 +195,12 @@ const PROBE = `(async () => {
   (await waitFor('[data-testid="board-toggle"]', 'board toggle back')).click();
   await waitFor('[data-testid="editor"]', 'back to the editor');
 
-  // Immersive "Read to me": opens a reader that highlights sentences as it reads.
+  // Immersive "Read to me": opens a reader that highlights each word as it reads.
   (await waitFor('[data-testid="read-aloud"]', 'read-aloud button')).click();
   await waitFor('[data-testid="read-aloud-overlay"]', 'read-aloud overlay');
   await waitFor('[data-testid="reader-page"]', 'reader page');
   if (!document.querySelector('.reader-sentence')) throw new Error('reader rendered no sentences');
+  if (!document.querySelector('.reader-word[data-wi]')) throw new Error('reader rendered no words to highlight');
   (await waitFor('[data-testid="reader-close"]', 'reader close button')).click();
   await sleep(120);
   if (document.querySelector('[data-testid="read-aloud-overlay"]')) throw new Error('reader overlay did not close');

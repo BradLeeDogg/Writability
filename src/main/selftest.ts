@@ -16,7 +16,7 @@ import { TRANSITIONS } from '@shared/transitions'
 import { GLOSSARY, glossaryMap } from '@shared/glossary'
 import { summarizeSource } from '@shared/reading'
 import { formatCitation } from '@shared/citations'
-import { docToPlainText, splitSentences, sentenceIndexAt } from '@shared/doc'
+import { docToPlainText, splitSentences, sentenceIndexAt, splitWords, wordIndexAt } from '@shared/doc'
 import { coachContext } from '@shared/coach'
 import {
   findThesisNode,
@@ -382,6 +382,18 @@ export async function runSelftest(): Promise<void> {
     assert.deepEqual(splitSentences(''), [], 'empty text yields no sentences')
     assert.equal(splitSentences('A fragment with no end').length, 1, 'a fragment is one sentence')
     pass('read-aloud sentence splitting')
+
+    // --- read-aloud word splitting (pure, for karaoke highlighting) -----
+    const words = splitWords('The cat sat.\n\nIt purred.')
+    assert.equal(words.length, 5, 'words are non-whitespace runs across breaks')
+    assert.equal(words[0].text, 'The')
+    assert.equal(words[2].text, 'sat.', 'trailing punctuation stays on the word')
+    assert.equal(words[0].start, 0)
+    assert.equal(words[1].start, 4, 'words carry source offsets')
+    assert.equal(wordIndexAt(words, 5), 1, 'an offset inside the second word maps to it')
+    assert.equal(wordIndexAt(words, 0), 0, 'offset 0 maps to the first word')
+    assert.deepEqual(splitWords('   '), [], 'whitespace-only yields no words')
+    pass('read-aloud word splitting')
 
     // --- promote board cards into outline sections (pure) ---------------
     const baseOutline = makeOutline('argument')

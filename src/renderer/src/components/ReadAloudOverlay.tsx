@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useStore } from '../store/useStore'
-import { docToPlainText, splitSentences, sentenceIndexAt } from '@shared/doc'
+import { docToPlainText, splitSentences, splitWords, sentenceIndexAt, wordIndexAt } from '@shared/doc'
 import { speak, stopSpeaking, ttsSupported } from '../lib/tts'
 
 // Immersive "Read to me" mode. A calm, full-screen reader that uses the
-// student's own font/size/spacing and highlights each sentence as it is
-// spoken — multi-sensory reading (see + hear) is one of the strongest
-// supports for dyslexic and ADHD readers. Fully offline (Web Speech API);
-// if a device has no voices it still shows the text to read along to.
+// student's own font/size/spacing and highlights each *word* as it is spoken,
+// with the current sentence gently tinted — multi-sensory reading (see + hear)
+// is one of the strongest supports for dyslexic and ADHD readers. Click any
+// word to start reading from there. Fully offline (Web Speech API); if a
+// device has no voices it still shows the text to read along to.
 export function ReadAloudOverlay(): JSX.Element | null {
   const open = useStore((s) => s.readAloudOpen)
   const close = useStore((s) => s.closeReadAloud)
@@ -16,16 +17,31 @@ export function ReadAloudOverlay(): JSX.Element | null {
 
   const text = useMemo(() => docToPlainText(doc), [doc])
   const sentences = useMemo(() => splitSentences(text), [text])
-  const [active, setActive] = useState(0)
+  const words = useMemo(() => splitWords(text), [text])
+  // Group words under their sentence once, so each render is linear.
+  const grouped = useMemo(() => {
+    const g: { w: (typeof words)[number]; wi: number }[][] = sentences.map(() => [])
+    words.forEach((w, wi) => {
+      const si = sentenceIndexAt(sentences, w.start)
+      if (g[si]) g[si].push({ w, wi })
+    })
+    return g
+  }, [words, sentences])
+
+  const [activeWord, setActiveWord] = useState(0)
+  const activeSentence = words[activeWord] ? sentenceIndexAt(sentences, words[activeWord].start) : 0
   const activeRef = useRef<HTMLSpanElement>(null)
 
-  const start = (): void => {
-    setActive(0)
-    speak(text, {
+  // Speak from a character offset; word boundaries are reported relative to the
+  // spoken substring, so add the offset back to land on the right global word.
+  const speakFrom = (charIndex: number): void => {
+    setActiveWord(wordIndexAt(words, charIndex))
+    speak(text.slice(charIndex), {
       rate: ttsRate,
-      onBoundary: (charIndex) => setActive(sentenceIndexAt(sentences, charIndex))
+      onBoundary: (ci) => setActiveWord(wordIndexAt(words, charIndex + ci))
     })
   }
+  const start = (): void => speakFrom(0)
 
   // Start reading when the overlay opens; stop on close/unmount.
   useEffect(() => {
@@ -35,10 +51,10 @@ export function ReadAloudOverlay(): JSX.Element | null {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
 
-  // Keep the spoken sentence in view.
+  // Keep the spoken line in view.
   useEffect(() => {
     activeRef.current?.scrollIntoView({ block: 'center', behavior: 'smooth' })
-  }, [active])
+  }, [activeSentence])
 
   // Escape closes.
   useEffect(() => {
@@ -51,6 +67,14 @@ export function ReadAloudOverlay(): JSX.Element | null {
   }, [open, close])
 
   if (!open) return null
+
+  // Click a word (event-delegated) to start reading from there.
+  const onWordClick = (e: React.MouseEvent): void => {
+    const el = (e.target as HTMLElement).closest('[data-wi]') as HTMLElement | null
+    if (!el) return
+    const wi = Number(el.dataset.wi)
+    if (Number.isFinite(wi) && words[wi]) speakFrom(words[wi].start)
+  }
 
   return (
     <div className="reader-overlay" data-testid="read-aloud-overlay" role="dialog" aria-label="Read aloud">
@@ -65,18 +89,25 @@ export function ReadAloudOverlay(): JSX.Element | null {
           </button>
         </div>
       </div>
-      <div className="reader-page" data-testid="reader-page">
+      <div className="reader-page" data-testid="reader-page" onClick={onWordClick}>
         {sentences.length === 0 && (
           <p className="muted">Nothing to read yet — write something first.</p>
         )}
-        {sentences.map((s, i) => (
+        {sentences.map((s, si) => (
           <span
             key={s.start}
-            ref={i === active ? activeRef : undefined}
-            className={'reader-sentence' + (i === active ? ' active' : '')}
-            onClick={() => setActive(i)}
+            ref={si === activeSentence ? activeRef : undefined}
+            className={'reader-sentence' + (si === activeSentence ? ' current' : '')}
           >
-            {s.text}{' '}
+            {grouped[si].map(({ w, wi }) => (
+              <span
+                key={w.start}
+                data-wi={wi}
+                className={'reader-word' + (wi === activeWord ? ' active' : '')}
+              >
+                {w.text}{' '}
+              </span>
+            ))}
           </span>
         ))}
       </div>

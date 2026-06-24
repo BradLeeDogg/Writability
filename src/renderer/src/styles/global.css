@@ -907,18 +907,27 @@ fieldset.field {
   color: var(--text);
 }
 .reader-sentence {
-  border-radius: 5px;
-  padding: 0 2px;
-  cursor: pointer;
+  border-radius: 6px;
   transition: background-color 0.15s ease;
 }
-.reader-sentence:hover {
+/* The line currently being read is gently tinted; the spoken word pops. */
+.reader-sentence.current {
   background: var(--surface-2);
+  box-shadow: 0 0 0 4px var(--surface-2);
 }
-.reader-sentence.active {
+.reader-word {
+  border-radius: 5px;
+  padding: 0 1px;
+  cursor: pointer;
+}
+.reader-word:hover {
+  background: var(--surface);
+  box-shadow: 0 0 0 2px var(--surface);
+}
+.reader-word.active {
   background: var(--accent);
   color: var(--accent-contrast);
-  box-shadow: 0 0 0 3px var(--accent);
+  box-shadow: 0 0 0 2px var(--accent);
 }
 .reader-note {
   text-align: center;
