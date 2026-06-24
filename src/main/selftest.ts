@@ -18,6 +18,7 @@ import { summarizeSource } from '@shared/reading'
 import { formatCitation } from '@shared/citations'
 import { docToPlainText, splitSentences, sentenceIndexAt, splitWords, wordIndexAt } from '@shared/doc'
 import { coachContext } from '@shared/coach'
+import { pickVoice, sortVoices } from '@shared/voices'
 import {
   findThesisNode,
   insertNoteUnder,
@@ -394,6 +395,22 @@ export async function runSelftest(): Promise<void> {
     assert.equal(wordIndexAt(words, 0), 0, 'offset 0 maps to the first word')
     assert.deepEqual(splitWords('   '), [], 'whitespace-only yields no words')
     pass('read-aloud word splitting')
+
+    // --- read-aloud voice selection (pure) ------------------------------
+    const voiceList = [
+      { voiceURI: 'fr1', name: 'Thomas', lang: 'fr-FR', localService: true },
+      { voiceURI: 'en2', name: 'Zira', lang: 'en-US', localService: false },
+      { voiceURI: 'en1', name: 'David', lang: 'en-US', localService: true }
+    ]
+    const ordered = sortVoices(voiceList)
+    assert.equal(ordered[0].name, 'David', 'English + offline voice sorts first')
+    assert.equal(ordered[1].name, 'Zira', 'English (remote) comes next')
+    assert.equal(ordered[2].name, 'Thomas', 'non-English voice sorts last')
+    assert.equal(pickVoice(voiceList, 'en2')?.name, 'Zira', 'pick by voiceURI')
+    assert.equal(pickVoice(voiceList, 'David')?.name, 'David', 'fall back to a name match')
+    assert.equal(pickVoice(voiceList, 'nope'), undefined, 'unknown preference uses engine default')
+    assert.equal(pickVoice([], 'en1'), undefined, 'no voices -> engine default')
+    pass('read-aloud voice selection')
 
     // --- promote board cards into outline sections (pure) ---------------
     const baseOutline = makeOutline('argument')

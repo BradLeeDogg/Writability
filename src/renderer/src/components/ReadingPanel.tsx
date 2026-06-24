@@ -7,6 +7,8 @@ import { summarizeSource } from '@shared/reading'
 // few most important sentences, the reading level, and a read-aloud button.
 export function ReadingPanel(): JSX.Element {
   const ttsRate = useStore((s) => s.settings.ttsRate)
+  const ttsPitch = useStore((s) => s.settings.ttsPitch)
+  const ttsVoice = useStore((s) => s.settings.ttsVoice)
   const [text, setText] = useState('')
   const [speaking, setSpeaking] = useState(false)
 
@@ -19,7 +21,12 @@ export function ReadingPanel(): JSX.Element {
       setSpeaking(false)
       return
     }
-    const ok = speak(text, { rate: ttsRate, onEnd: () => setSpeaking(false) })
+    const ok = speak(text, {
+      rate: ttsRate,
+      pitch: ttsPitch,
+      voiceURI: ttsVoice,
+      onEnd: () => setSpeaking(false)
+    })
     setSpeaking(ok)
     if (!ok) alert('Read-aloud is not available on this device.')
   }

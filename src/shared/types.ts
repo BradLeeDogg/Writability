@@ -145,6 +145,10 @@ export interface AppSettings {
   overlayTint: OverlayTint
   /** Read-aloud speaking rate (0.6 – 1.4). */
   ttsRate: number
+  /** Read-aloud pitch (0.6 – 1.4); lower can feel calmer. */
+  ttsPitch: number
+  /** Preferred read-aloud voice (its voiceURI). Empty = the system default. */
+  ttsVoice?: string
   /** Show the clarity panel results. */
   showClarity: boolean
   /** Has the student seen the first-run welcome guide? */
@@ -176,6 +180,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   reduceMotion: false,
   overlayTint: 'none',
   ttsRate: 1,
+  ttsPitch: 1,
   showClarity: true,
   onboarded: false,
   aiModel: 'claude-opus-4-8'

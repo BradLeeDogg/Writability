@@ -125,6 +125,9 @@ const PROBE = `(async () => {
   await waitFor('[data-testid="backup-create"]', 'backup button');
   await waitFor('[data-testid="backup-restore"]', 'restore button');
 
+  // Read-aloud voice controls (voice picker when available, plus a preview).
+  await waitFor('[data-testid="tts-preview"]', 'read-aloud voice preview');
+
   // Opt-in AI controls render; set a dummy key to reveal the helper (no call is made).
   await waitFor('[data-testid="ai-model"]', 'AI model select');
   setValue(await waitFor('[data-testid="ai-key"]', 'AI key input'), 'sk-ant-smoke-test');

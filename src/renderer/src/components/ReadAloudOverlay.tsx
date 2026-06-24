@@ -14,6 +14,8 @@ export function ReadAloudOverlay(): JSX.Element | null {
   const close = useStore((s) => s.closeReadAloud)
   const doc = useStore((s) => s.current?.content.doc)
   const ttsRate = useStore((s) => s.settings.ttsRate)
+  const ttsPitch = useStore((s) => s.settings.ttsPitch)
+  const ttsVoice = useStore((s) => s.settings.ttsVoice)
 
   const text = useMemo(() => docToPlainText(doc), [doc])
   const sentences = useMemo(() => splitSentences(text), [text])
@@ -38,6 +40,8 @@ export function ReadAloudOverlay(): JSX.Element | null {
     setActiveWord(wordIndexAt(words, charIndex))
     speak(text.slice(charIndex), {
       rate: ttsRate,
+      pitch: ttsPitch,
+      voiceURI: ttsVoice,
       onBoundary: (ci) => setActiveWord(wordIndexAt(words, charIndex + ci))
     })
   }
