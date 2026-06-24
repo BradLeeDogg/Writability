@@ -2,8 +2,12 @@
 // model list live here (dependency-free, unit-testable); the actual network
 // call lives in the main process (src/main/services/ai.ts) and only ever runs
 // when the student clicks an AI button with their own key configured.
+//
+// IMPORTANT product principle: the AI is a *coach*, not a ghostwriter. It helps
+// the student brainstorm, plan, and reflect — it must never write the essay,
+// paragraphs, or finished sentences for them. Every prompt enforces this.
 
-export type AiTask = 'paraphrase' | 'tone'
+export type AiTask = 'brainstorm' | 'outline' | 'feedback'
 
 export interface AiPrompt {
   system: string
@@ -20,7 +24,7 @@ export interface AiModelOption {
 export const AI_MODELS: AiModelOption[] = [
   { id: 'claude-opus-4-8', label: 'Most capable', note: 'Best quality (Opus)' },
   { id: 'claude-sonnet-4-6', label: 'Balanced', note: 'Good and quicker (Sonnet)' },
-  { id: 'claude-haiku-4-5', label: 'Fastest & cheapest', note: 'Great for quick rewrites (Haiku)' }
+  { id: 'claude-haiku-4-5', label: 'Fastest & cheapest', note: 'Great for quick help (Haiku)' }
 ]
 
 export const DEFAULT_AI_MODEL = 'claude-opus-4-8'
@@ -29,22 +33,46 @@ export function isValidModel(id: string): boolean {
   return AI_MODELS.some((m) => m.id === id)
 }
 
-const PARAPHRASE_SYSTEM =
-  'You are a kind, encouraging writing tutor for students, including many who ' +
-  'are dyslexic or have ADHD. Rewrite the student\'s text so it is clearer and ' +
-  'easier to read, keeping their meaning and their own voice. Use plain words ' +
-  'and shorter sentences. Do not add new ideas or facts. Respond with ONLY the ' +
-  'rewritten text — no preamble, no quotation marks, no explanation.'
+// Shared guardrail appended to every coaching prompt.
+const NO_GHOSTWRITING =
+  ' You are a coach, not a writer. NEVER write the essay, paragraphs, or finished ' +
+  'sentences the student could copy in. Your job is to spark and organise THEIR own ' +
+  'thinking. Keep ideas short. The student writes the actual words themselves.'
 
-const TONE_SYSTEM =
-  'You are a supportive writing tutor. In 2–3 short, plain sentences, describe ' +
-  'the tone of the student\'s text (for example: formal, casual, confident, ' +
-  'tentative, friendly). Then suggest one specific, gentle way they could adjust ' +
-  'it for an academic essay, if needed. Be warm and concrete. Do not rewrite the ' +
-  'whole text.'
+const BRAINSTORM_SYSTEM =
+  'You are a warm brainstorming coach for a student, including many who are dyslexic ' +
+  'or have ADHD. Given their topic or assignment, offer 5–7 short, distinct ideas, ' +
+  'angles, or questions they could explore. Put each on its own line starting with ' +
+  '"- ". Keep each to a short phrase or question — not a sentence to copy.' +
+  NO_GHOSTWRITING
+
+const OUTLINE_SYSTEM =
+  'You are an outlining coach. Given the student\'s topic or thesis, suggest a clear ' +
+  'structure for their paper: a short, ordered list of the points or sections to cover. ' +
+  'Phrase each as a brief prompt for what THEY should write (e.g. "Introduce the main ' +
+  'problem", "Give one example that backs up your point"). One per line starting with ' +
+  '"- ". Do not write the content itself.' +
+  NO_GHOSTWRITING
+
+const FEEDBACK_SYSTEM =
+  'You are a kind, specific writing coach. Read the student\'s draft and give 2–4 short ' +
+  'pieces of encouraging feedback or questions that help them improve it themselves ' +
+  '(e.g. "Your second point is strong — can you add evidence?"). Point things out and ' +
+  'ask questions.' +
+  NO_GHOSTWRITING
 
 export function buildPrompt(task: AiTask, text: string): AiPrompt {
   const user = text.trim()
-  if (task === 'tone') return { system: TONE_SYSTEM, user }
-  return { system: PARAPHRASE_SYSTEM, user }
+  if (task === 'outline') return { system: OUTLINE_SYSTEM, user }
+  if (task === 'feedback') return { system: FEEDBACK_SYSTEM, user }
+  return { system: BRAINSTORM_SYSTEM, user }
+}
+
+/** Split a coaching reply into discrete items (for cards). Falls back to one item. */
+export function splitIntoItems(text: string): string[] {
+  const lines = (text || '')
+    .split('\n')
+    .map((l) => l.replace(/^\s*[-*•\d.)]+\s*/, '').trim())
+    .filter((l) => l.length > 0)
+  return lines.length > 0 ? lines : (text || '').trim() ? [(text || '').trim()] : []
 }
