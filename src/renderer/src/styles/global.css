@@ -1261,6 +1261,12 @@ fieldset.field {
   padding: 0.35rem 0.8rem;
   font-size: 0.8rem;
   color: var(--text-muted);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 1rem;
+}
+.status-sub {
+  opacity: 0.8;
 }
 
 /* Always-visible thesis reminder, docked above the writing area. */

@@ -12,6 +12,7 @@ import { Spotlight, spotlightKey, Glossary, glossaryKey, Spellcheck, spellcheckK
 import { ensureSpell, setCustomWords } from '../lib/spell'
 import { outlineToDocContent } from '@shared/scaffold'
 import { TRANSITIONS } from '@shared/transitions'
+import { pageStats } from '@shared/format'
 
 export function Editor(): JSX.Element {
   // App only mounts the Editor when a paper is open.
@@ -149,6 +150,7 @@ export function Editor(): JSX.Element {
 
   const words = editor?.storage.characterCount.words() ?? 0
   const goal = current.meta.wordGoal
+  const { pages, wordsToNextPage } = pageStats(words)
 
   const insertOutline = (): void => {
     if (!editor) return
@@ -195,6 +197,14 @@ export function Editor(): JSX.Element {
           {words} {words === 1 ? 'word' : 'words'}
           {goal ? ` of ${goal}` : ''}
         </span>
+        {words > 0 && (
+          <span className="status-pages" data-testid="page-count">
+            ≈ {pages} {pages === 1 ? 'page' : 'pages'}
+            {wordsToNextPage > 0 && (
+              <span className="status-sub"> · ~{wordsToNextPage} to fill this page</span>
+            )}
+          </span>
+        )}
       </footer>
     </section>
   )

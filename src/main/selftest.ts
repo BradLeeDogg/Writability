@@ -17,6 +17,7 @@ import { GLOSSARY, glossaryMap } from '@shared/glossary'
 import { summarizeSource } from '@shared/reading'
 import { formatCitation } from '@shared/citations'
 import { docToPlainText, splitSentences, sentenceIndexAt, splitWords, wordIndexAt, replaceWordInDoc } from '@shared/doc'
+import { estimatePages, pageStats, WORDS_PER_PAGE } from '@shared/format'
 import { coachContext } from '@shared/coach'
 import { pickVoice, sortVoices } from '@shared/voices'
 import { applyCase, confusableFor, looksLikeWord, mergeCustomWord, rankSuggestions } from '@shared/spelling'
@@ -246,6 +247,16 @@ export async function runSelftest(): Promise<void> {
     )
     assert.ok(bullets.requirements.some((r) => /discuss two causes/i.test(r)), 'plain bullets are captured')
     pass('assignment decoder')
+
+    // --- page estimate for the word-count footer (pure) -----------------
+    assert.equal(estimatePages(0), 0, 'no words -> no pages')
+    assert.equal(estimatePages(1), 1, 'any words -> at least one page')
+    assert.equal(estimatePages(WORDS_PER_PAGE), 1, 'a full page is one page')
+    assert.equal(estimatePages(WORDS_PER_PAGE + 1), 2, 'spilling over rounds up')
+    assert.equal(pageStats(WORDS_PER_PAGE + 50).pages, 2, 'page count for a partial second page')
+    assert.equal(pageStats(WORDS_PER_PAGE + 50).wordsToNextPage, WORDS_PER_PAGE - 50, 'words left to fill the page')
+    assert.equal(pageStats(WORDS_PER_PAGE * 2).wordsToNextPage, 0, 'an exact page boundary needs no more words')
+    pass('page estimate')
 
     // --- drafting bridge: scaffold + sentence split + transitions -------
     const scaffold = outlineToDocContent(makeOutline('argument'))

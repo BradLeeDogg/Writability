@@ -80,6 +80,8 @@ const PROBE = `(async () => {
   // Drafting bridge: insert the outline into the document as real headings.
   (await waitFor('[data-testid="insert-outline"]', 'insert outline button')).click();
   await waitFor('.prose h2', 'outline headings inserted into the document');
+  // The status bar shows an estimated page count once there are words.
+  await waitFor('[data-testid="page-count"]', 'page-count in the status bar');
 
   // Linking-words menu inserts a phrase at the cursor.
   (await waitFor('[data-testid="linking-words"]', 'linking words menu')).click();
