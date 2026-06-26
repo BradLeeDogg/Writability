@@ -15,6 +15,7 @@ import type {
   ExportFormat,
   Paper,
   PaperContent,
+  PaperFormat,
   PaperMeta,
   PaperSummary
 } from './types'
@@ -22,6 +23,7 @@ import type {
 export interface CreatePaperInput {
   title: string
   essayType: EssayType
+  format?: PaperFormat
 }
 
 export interface SavePaperInput {

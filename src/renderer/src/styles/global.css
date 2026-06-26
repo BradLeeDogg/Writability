@@ -1269,6 +1269,26 @@ fieldset.field {
   opacity: 0.8;
 }
 
+/* Per-paper details (format + heading) in the Assignment tab */
+.paper-details {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.4rem 0.7rem;
+  margin-bottom: 0.9rem;
+  background: var(--surface);
+}
+.paper-details > summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--text);
+}
+.paper-details[open] > summary {
+  margin-bottom: 0.5rem;
+}
+.paper-details .field {
+  margin-bottom: 0.5rem;
+}
+
 /* Always-visible thesis reminder, docked above the writing area. */
 .thesis-pin {
   display: flex;

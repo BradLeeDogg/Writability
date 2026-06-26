@@ -47,3 +47,48 @@ export function pageStats(words: number): PageStats {
 export function citationStyleFor(format: PaperFormat): 'mla' | 'apa' | 'chicago' {
   return format === 'apa' ? 'apa' : format === 'chicago' ? 'chicago' : 'mla'
 }
+
+/** Layout decisions for a format, shared by the docx and PDF exporters. */
+export interface FormatSpec {
+  /** A separate, centred title page (APA, Chicago). */
+  titlePage: boolean
+  /** MLA-style top-left name / instructor / course / date block. */
+  mlaHeaderBlock: boolean
+  /** Running-header page number style. */
+  pageNumber: 'none' | 'right' | 'mla'
+  /** Repeat the title (bold, centred) at the top of the body (APA). */
+  titleOnBody: boolean
+  /** Heading above the source list. */
+  referenceLabel: string
+}
+
+export function formatSpec(format: PaperFormat): FormatSpec {
+  switch (format) {
+    case 'mla':
+      return { titlePage: false, mlaHeaderBlock: true, pageNumber: 'mla', titleOnBody: false, referenceLabel: 'Works Cited' }
+    case 'apa':
+      return { titlePage: true, mlaHeaderBlock: false, pageNumber: 'right', titleOnBody: true, referenceLabel: 'References' }
+    case 'chicago':
+      return { titlePage: true, mlaHeaderBlock: false, pageNumber: 'right', titleOnBody: false, referenceLabel: 'Bibliography' }
+    default:
+      return { titlePage: false, mlaHeaderBlock: false, pageNumber: 'none', titleOnBody: false, referenceLabel: 'Works Cited' }
+  }
+}
+
+/** Surname for an MLA running header ("Smith 3"). Falls back to the whole name. */
+export function lastNameOf(name?: string): string {
+  const parts = (name ?? '').trim().split(/\s+/).filter(Boolean)
+  return parts.length ? parts[parts.length - 1] : ''
+}
+
+/** The non-empty MLA heading lines, in order. */
+export function mlaHeadingLines(heading?: PaperHeading): string[] {
+  const h = heading ?? {}
+  return [h.studentName, h.instructor, h.course, h.date].map((s) => (s ?? '').trim()).filter(Boolean)
+}
+
+/** The centred lines under the title on an APA/Chicago title page. */
+export function titlePageLines(heading?: PaperHeading): string[] {
+  const h = heading ?? {}
+  return [h.studentName, h.course, h.instructor, h.date].map((s) => (s ?? '').trim()).filter(Boolean)
+}

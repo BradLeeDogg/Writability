@@ -2,7 +2,8 @@ import { useState } from 'react'
 import { useStore } from '../store/useStore'
 import { formatWhen } from '../lib/format'
 import { ESSAY_TYPE_LABELS } from '@shared/types'
-import type { EssayType } from '@shared/types'
+import type { EssayType, PaperFormat } from '@shared/types'
+import { PAPER_FORMATS } from '@shared/format'
 
 const ESSAY_TYPES: EssayType[] = ['argument', 'research', 'lab', 'thesis', 'reflection']
 
@@ -15,12 +16,14 @@ export function Library(): JSX.Element {
   const [showNew, setShowNew] = useState(false)
   const [title, setTitle] = useState('')
   const [essayType, setEssayType] = useState<EssayType>('argument')
+  const [format, setFormat] = useState<PaperFormat>('mla')
 
   const onCreate = async (): Promise<void> => {
-    await createPaper({ title: title.trim() || 'Untitled paper', essayType })
+    await createPaper({ title: title.trim() || 'Untitled paper', essayType, format })
     setShowNew(false)
     setTitle('')
     setEssayType('argument')
+    setFormat('mla')
   }
 
   return (
@@ -70,6 +73,26 @@ export function Library(): JSX.Element {
               ))}
             </div>
           </fieldset>
+          <fieldset className="field">
+            <legend>Which format does it need?</legend>
+            <div className="chips">
+              {PAPER_FORMATS.map((f) => (
+                <button
+                  key={f.value}
+                  type="button"
+                  data-testid={`format-${f.value}`}
+                  className={'chip' + (format === f.value ? ' selected' : '')}
+                  aria-pressed={format === f.value}
+                  title={f.blurb}
+                  onClick={() => setFormat(f.value)}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
+            <p className="muted small">{PAPER_FORMATS.find((f) => f.value === format)?.blurb}</p>
+          </fieldset>
+
           <div className="row">
             <button className="primary" data-testid="create-paper" onClick={() => void onCreate()}>
               Create paper

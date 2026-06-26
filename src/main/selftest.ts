@@ -17,7 +17,7 @@ import { GLOSSARY, glossaryMap } from '@shared/glossary'
 import { summarizeSource } from '@shared/reading'
 import { formatCitation } from '@shared/citations'
 import { docToPlainText, splitSentences, sentenceIndexAt, splitWords, wordIndexAt, replaceWordInDoc } from '@shared/doc'
-import { estimatePages, pageStats, WORDS_PER_PAGE } from '@shared/format'
+import { estimatePages, pageStats, WORDS_PER_PAGE, formatSpec, lastNameOf, mlaHeadingLines } from '@shared/format'
 import { coachContext } from '@shared/coach'
 import { pickVoice, sortVoices } from '@shared/voices'
 import { applyCase, confusableFor, looksLikeWord, mergeCustomWord, rankSuggestions } from '@shared/spelling'
@@ -258,6 +258,22 @@ export async function runSelftest(): Promise<void> {
     assert.equal(pageStats(WORDS_PER_PAGE * 2).wordsToNextPage, 0, 'an exact page boundary needs no more words')
     pass('page estimate')
 
+    // --- paper format specs (pure) --------------------------------------
+    assert.equal(formatSpec('mla').mlaHeaderBlock, true, 'MLA uses a name block, not a title page')
+    assert.equal(formatSpec('mla').pageNumber, 'mla', 'MLA numbers pages with the surname')
+    assert.equal(formatSpec('apa').titlePage, true, 'APA uses a title page')
+    assert.equal(formatSpec('apa').referenceLabel, 'References', 'APA calls it References')
+    assert.equal(formatSpec('chicago').referenceLabel, 'Bibliography', 'Chicago calls it Bibliography')
+    assert.equal(formatSpec('none').pageNumber, 'none', 'no format = no page numbers')
+    assert.equal(lastNameOf('Ada B. Lovelace'), 'Lovelace', 'surname for the running header')
+    assert.equal(lastNameOf(''), '', 'no name -> empty surname')
+    assert.deepEqual(
+      mlaHeadingLines({ studentName: 'Ada', instructor: 'Mr Babbage', course: '', date: '14 May' }),
+      ['Ada', 'Mr Babbage', '14 May'],
+      'heading lines drop the empty course'
+    )
+    pass('paper format specs')
+
     // --- drafting bridge: scaffold + sentence split + transitions -------
     const scaffold = outlineToDocContent(makeOutline('argument'))
     assert.ok(
@@ -343,7 +359,26 @@ export async function runSelftest(): Promise<void> {
     assert.ok(docxBytes.length > 100, 'docx export non-empty')
     const txtBytes = await renderExport(reopened!, 'txt')
     assert.ok(txtBytes.toString('utf8').includes('Hello world'), 'txt export has prose')
-    pass('export (docx + txt)')
+
+    // Format-aware export: an MLA paper carries its heading block, and each
+    // format renders to docx without throwing.
+    const mlaPaper: typeof reopened = {
+      ...reopened!,
+      meta: {
+        ...reopened!.meta,
+        format: 'mla',
+        pageNumbers: true,
+        heading: { studentName: 'Ada Lovelace', instructor: 'Mr Babbage', course: 'History 101', date: '14 May 2026' }
+      }
+    }
+    const mlaTxt = (await renderExport(mlaPaper, 'txt')).toString('utf8')
+    assert.ok(mlaTxt.includes('Ada Lovelace'), 'MLA txt includes the heading name')
+    assert.ok(mlaTxt.includes('Mr Babbage'), 'MLA txt includes the instructor')
+    for (const fmt of ['mla', 'apa', 'chicago', 'none'] as const) {
+      const bytes = await renderExport({ ...mlaPaper, meta: { ...mlaPaper.meta, format: fmt } }, 'docx')
+      assert.ok(bytes.length > 100, `${fmt} docx export is produced`)
+    }
+    pass('export (format-aware docx + txt)')
 
     // --- backup round-trip ----------------------------------------------
     const bkPaper = createPaper({ title: 'Backup me', essayType: 'reflection' })

@@ -1,16 +1,22 @@
 import { useMemo, useState } from 'react'
 import { useStore } from '../store/useStore'
 import { findCommandWords } from '@shared/assignment'
+import { PAPER_FORMATS } from '@shared/format'
+import type { PaperFormat, PaperHeading } from '@shared/types'
 
 export function AssignmentPanel(): JSX.Element {
   const current = useStore((s) => s.current)!
   const setPrompt = useStore((s) => s.setAssignmentPrompt)
+  const setMeta = useStore((s) => s.setMeta)
   const decode = useStore((s) => s.decodeAssignment)
   const addRequirement = useStore((s) => s.addRequirement)
   const toggleRequirement = useStore((s) => s.toggleRequirement)
   const removeRequirement = useStore((s) => s.removeRequirement)
 
   const { prompt, requirements } = current.content.assignment
+  const meta = current.meta
+  const heading: PaperHeading = meta.heading ?? {}
+  const setHeading = (patch: Partial<PaperHeading>): void => setMeta({ heading: { ...heading, ...patch } })
   const commandWords = useMemo(() => findCommandWords(prompt), [prompt])
   const done = requirements.filter((r) => r.done).length
 
@@ -34,6 +40,55 @@ export function AssignmentPanel(): JSX.Element {
 
   return (
     <div className="assignment" data-testid="assignment-panel">
+      <details className="paper-details" data-testid="paper-details">
+        <summary>Paper details &amp; format</summary>
+        <p className="muted small">
+          Used to format your export (heading, spacing, page numbers) in the style you choose.
+        </p>
+        <label className="field">
+          <span>Format</span>
+          <select
+            data-testid="meta-format"
+            value={meta.format ?? 'none'}
+            onChange={(e) => setMeta({ format: e.target.value as PaperFormat, pageNumbers: e.target.value !== 'none' })}
+          >
+            {PAPER_FORMATS.map((f) => (
+              <option key={f.value} value={f.value}>
+                {f.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="field">
+          <span>Your name</span>
+          <input
+            data-testid="meta-name"
+            value={heading.studentName ?? ''}
+            onChange={(e) => setHeading({ studentName: e.target.value })}
+          />
+        </label>
+        <label className="field">
+          <span>Course / subject</span>
+          <input value={heading.course ?? ''} onChange={(e) => setHeading({ course: e.target.value })} />
+        </label>
+        <label className="field">
+          <span>Teacher / instructor</span>
+          <input value={heading.instructor ?? ''} onChange={(e) => setHeading({ instructor: e.target.value })} />
+        </label>
+        <label className="field">
+          <span>Date</span>
+          <input value={heading.date ?? ''} placeholder="e.g. 14 May 2026" onChange={(e) => setHeading({ date: e.target.value })} />
+        </label>
+        <label className="toggle">
+          <input
+            type="checkbox"
+            checked={meta.pageNumbers ?? false}
+            onChange={(e) => setMeta({ pageNumbers: e.target.checked })}
+          />
+          <span>Number the pages</span>
+        </label>
+      </details>
+
       <p className="panel-intro">
         Paste your assignment instructions or rubric. Writability will explain the instruction
         words in plain language and pull out a checklist of what to do — including each rubric

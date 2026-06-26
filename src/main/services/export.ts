@@ -4,7 +4,9 @@ import { join } from 'path'
 import {
   AlignmentType,
   Document,
+  Header,
   HeadingLevel,
+  PageNumber,
   Packer,
   Paragraph,
   TextRun
@@ -12,6 +14,14 @@ import {
 import { openPaper } from './papers'
 import { docToParagraphs, docToPlainText } from '@shared/doc'
 import { formatCitation } from '@shared/citations'
+import {
+  citationStyleFor,
+  formatSpec,
+  lastNameOf,
+  mlaHeadingLines,
+  titlePageLines
+} from '@shared/format'
+import type { FormatSpec, PaperFormat } from '@shared/format'
 import type { ExportInput, ExportResult } from '@shared/api'
 import type { ExportFormat, Paper } from '@shared/types'
 
@@ -21,11 +31,21 @@ const FILTERS: Record<ExportFormat, Electron.FileFilter[]> = {
   txt: [{ name: 'Plain text', extensions: ['txt'] }]
 }
 
+const DOUBLE = 480 // line spacing in twentieths of a point (double-spaced)
+const INDENT = 720 // first-line indent in twips (0.5 inch)
+
+function paperFormat(paper: Paper): PaperFormat {
+  return paper.meta.format ?? 'none'
+}
+function wantsPageNumbers(paper: Paper, spec: FormatSpec): boolean {
+  return paper.meta.pageNumbers !== false && spec.pageNumber !== 'none'
+}
+
 /** Build the export bytes for a paper. Used by exportPaper and the self-test. */
 export async function renderExport(paper: Paper, format: ExportFormat): Promise<Buffer> {
   if (format === 'docx') return buildDocx(paper)
   if (format === 'pdf') return buildPdf(paper)
-  return Buffer.from(docToPlainText(paper.content.doc), 'utf8')
+  return Buffer.from(buildTxt(paper), 'utf8')
 }
 
 export async function exportPaper(input: ExportInput): Promise<ExportResult> {
@@ -51,48 +71,152 @@ export async function exportPaper(input: ExportInput): Promise<ExportResult> {
   }
 }
 
+// --- Word (.docx) -----------------------------------------------------------
+function bodyPara(text: string, opts: { indent?: boolean; align?: (typeof AlignmentType)[keyof typeof AlignmentType]; bold?: boolean } = {}): Paragraph {
+  return new Paragraph({
+    alignment: opts.align,
+    spacing: { line: DOUBLE, after: 0 },
+    indent: opts.indent ? { firstLine: INDENT } : undefined,
+    children: [new TextRun({ text, bold: opts.bold })]
+  })
+}
+
+function titlePageDocx(paper: Paper, fmt: PaperFormat): Paragraph[] {
+  const out: Paragraph[] = []
+  for (let i = 0; i < 8; i++) out.push(new Paragraph({ children: [new TextRun('')] }))
+  out.push(bodyPara(paper.meta.title, { align: AlignmentType.CENTER, bold: fmt === 'apa' }))
+  for (let i = 0; i < 6; i++) out.push(new Paragraph({ children: [new TextRun('')] }))
+  for (const line of titlePageLines(paper.meta.heading)) {
+    out.push(bodyPara(line, { align: AlignmentType.CENTER }))
+  }
+  return out
+}
+
 async function buildDocx(paper: Paper): Promise<Buffer> {
-  const children: Paragraph[] = [
-    new Paragraph({ text: paper.meta.title, heading: HeadingLevel.TITLE })
-  ]
+  const fmt = paperFormat(paper)
+  const spec = formatSpec(fmt)
+  const heading = paper.meta.heading ?? {}
+  const children: Paragraph[] = []
+
+  if (spec.titlePage) {
+    children.push(...titlePageDocx(paper, fmt))
+    children.push(new Paragraph({ pageBreakBefore: true }))
+  }
+
+  if (spec.mlaHeaderBlock) {
+    for (const line of mlaHeadingLines(heading)) children.push(bodyPara(line, { align: AlignmentType.LEFT }))
+  }
+
+  if (fmt === 'mla') {
+    children.push(bodyPara(paper.meta.title, { align: AlignmentType.CENTER }))
+  } else if (spec.titleOnBody) {
+    children.push(bodyPara(paper.meta.title, { align: AlignmentType.CENTER, bold: true }))
+  } else if (!spec.titlePage) {
+    children.push(new Paragraph({ text: paper.meta.title, heading: HeadingLevel.TITLE }))
+  }
 
   const paras = docToParagraphs(paper.content.doc)
-  if (paras.length === 0) {
-    children.push(new Paragraph({ children: [new TextRun('')] }))
-  } else {
-    for (const p of paras) {
+  if (paras.length === 0) children.push(new Paragraph({ children: [new TextRun('')] }))
+  else for (const p of paras) children.push(bodyPara(p, { indent: true }))
+
+  if (paper.content.sources.length) {
+    const style = citationStyleFor(fmt)
+    children.push(bodyPara(spec.referenceLabel, { align: AlignmentType.CENTER, bold: fmt !== 'mla' }))
+    for (const s of paper.content.sources) {
       children.push(
         new Paragraph({
-          spacing: { line: 360, after: 120 },
-          children: [new TextRun(p)]
+          spacing: { line: DOUBLE, after: 0 },
+          indent: { hanging: INDENT },
+          children: [new TextRun(formatCitation(s, style).reference)]
         })
       )
     }
   }
 
-  if (paper.content.sources.length) {
-    children.push(
-      new Paragraph({
-        text: 'Works Cited',
-        heading: HeadingLevel.HEADING_1,
-        alignment: AlignmentType.CENTER
-      })
-    )
-    for (const s of paper.content.sources) {
-      children.push(new Paragraph({ children: [new TextRun(formatCitation(s, 'mla').reference)] }))
-    }
+  let headers: { default: Header } | undefined
+  if (wantsPageNumbers(paper, spec)) {
+    const lastName = spec.pageNumber === 'mla' ? lastNameOf(heading.studentName) : ''
+    const runs = lastName
+      ? [new TextRun(lastName + ' '), new TextRun({ children: [PageNumber.CURRENT] })]
+      : [new TextRun({ children: [PageNumber.CURRENT] })]
+    headers = { default: new Header({ children: [new Paragraph({ alignment: AlignmentType.RIGHT, children: runs })] }) }
   }
 
   const doc = new Document({
     creator: 'Writability',
     title: paper.meta.title,
-    sections: [{ children }]
+    styles: { default: { document: { run: { font: 'Times New Roman', size: 24 } } } },
+    sections: [{ headers, children }]
   })
-  // docx returns a Buffer here in the Node build.
   return (await Packer.toBuffer(doc)) as Buffer
 }
 
+// --- PDF (HTML -> printToPDF) -----------------------------------------------
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+}
+
+function renderHtml(paper: Paper): string {
+  const fmt = paperFormat(paper)
+  const spec = formatSpec(fmt)
+  const heading = paper.meta.heading ?? {}
+  const title = escapeHtml(paper.meta.title)
+
+  let body = ''
+  if (spec.titlePage) {
+    const lines = titlePageLines(heading).map(escapeHtml).join('<br />')
+    body += `<section class="title-page"><h1 class="${fmt === 'apa' ? 'bold' : ''}">${title}</h1><div class="tp-meta">${lines}</div></section>`
+  }
+  if (spec.mlaHeaderBlock) {
+    const lines = mlaHeadingLines(heading).map(escapeHtml).join('<br />')
+    if (lines) body += `<div class="mla-head">${lines}</div>`
+  }
+  if (fmt === 'mla') body += `<h1 class="doc-title">${title}</h1>`
+  else if (spec.titleOnBody) body += `<h1 class="doc-title bold">${title}</h1>`
+  else if (!spec.titlePage) body += `<h1 class="doc-title">${title}</h1>`
+
+  body += docToParagraphs(paper.content.doc)
+    .map((p) => `<p>${escapeHtml(p)}</p>`)
+    .join('\n')
+
+  if (paper.content.sources.length) {
+    const style = citationStyleFor(fmt)
+    body +=
+      `<h2>${escapeHtml(spec.referenceLabel)}</h2>` +
+      paper.content.sources
+        .map((s) => `<p class="cite">${escapeHtml(formatCitation(s, style).reference)}</p>`)
+        .join('\n')
+  }
+
+  return `<!doctype html>
+<html lang="en"><head><meta charset="utf-8" />
+<style>
+  body { font-family: 'Times New Roman', Georgia, serif; font-size: 12pt; line-height: 2; color: #111; }
+  .title-page { text-align: center; page-break-after: always; padding-top: 3in; }
+  .title-page h1 { font-size: 12pt; font-weight: normal; margin: 0; }
+  .title-page .tp-meta { margin-top: 2.5in; }
+  .bold { font-weight: bold; }
+  .mla-head { text-indent: 0; }
+  h1.doc-title { font-size: 12pt; font-weight: normal; text-align: center; text-indent: 0; margin: 0; }
+  h2 { font-size: 12pt; font-weight: normal; text-align: center; text-indent: 0; }
+  p { margin: 0; text-indent: 0.5in; }
+  p.cite { text-indent: -0.5in; margin-left: 0.5in; }
+</style></head>
+<body>${body}</body></html>`
+}
+
 async function buildPdf(paper: Paper): Promise<Buffer> {
+  const spec = formatSpec(paperFormat(paper))
+  const showPageNum = wantsPageNumbers(paper, spec)
+  const lastName = spec.pageNumber === 'mla' ? escapeHtml(lastNameOf(paper.meta.heading?.studentName)) : ''
+  const headerTemplate = showPageNum
+    ? `<div style="width:100%; font-family:'Times New Roman',serif; font-size:11px; padding:0 1in; text-align:right;">${lastName ? lastName + ' ' : ''}<span class="pageNumber"></span></div>`
+    : '<span></span>'
+
   const html = renderHtml(paper)
   const win = new BrowserWindow({
     show: false,
@@ -103,7 +227,10 @@ async function buildPdf(paper: Paper): Promise<Buffer> {
     const pdf = await win.webContents.printToPDF({
       printBackground: true,
       pageSize: 'Letter',
-      margins: { top: 1, bottom: 1, left: 1, right: 1 }
+      margins: { top: 1, bottom: 1, left: 1, right: 1 },
+      displayHeaderFooter: showPageNum,
+      headerTemplate,
+      footerTemplate: '<span></span>'
     })
     return pdf
   } finally {
@@ -111,37 +238,20 @@ async function buildPdf(paper: Paper): Promise<Buffer> {
   }
 }
 
-function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-}
-
-function renderHtml(paper: Paper): string {
-  const paras = docToParagraphs(paper.content.doc)
-    .map((p) => `<p>${escapeHtml(p)}</p>`)
-    .join('\n')
-  const works = paper.content.sources.length
-    ? `<h2>Works Cited</h2>` +
-      paper.content.sources
-        .map((s) => `<p class="cite">${escapeHtml(formatCitation(s, 'mla').reference)}</p>`)
-        .join('\n')
-    : ''
-  return `<!doctype html>
-<html lang="en"><head><meta charset="utf-8" />
-<style>
-  body { font-family: Georgia, 'Times New Roman', serif; font-size: 12pt; line-height: 2;
-         color: #111; max-width: 7in; margin: 0 auto; }
-  h1 { font-size: 18pt; text-align: center; }
-  h2 { font-size: 14pt; text-align: center; }
-  p { margin: 0 0 0.5em; text-indent: 0.5in; }
-  p.cite { text-indent: -0.5in; padding-left: 0.5in; }
-</style></head>
-<body>
-  <h1>${escapeHtml(paper.meta.title)}</h1>
-  ${paras}
-  ${works}
-</body></html>`
+// --- Plain text -------------------------------------------------------------
+function buildTxt(paper: Paper): string {
+  const fmt = paperFormat(paper)
+  const spec = formatSpec(fmt)
+  const heading = paper.meta.heading ?? {}
+  const lines: string[] = []
+  const head = spec.mlaHeaderBlock ? mlaHeadingLines(heading) : spec.titlePage ? titlePageLines(heading) : []
+  if (head.length) lines.push(...head, '')
+  lines.push(paper.meta.title, '')
+  lines.push(docToPlainText(paper.content.doc))
+  if (paper.content.sources.length) {
+    const style = citationStyleFor(fmt)
+    lines.push('', spec.referenceLabel)
+    for (const s of paper.content.sources) lines.push(formatCitation(s, style).reference)
+  }
+  return lines.join('\n')
 }

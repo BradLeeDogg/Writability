@@ -48,7 +48,8 @@ const PROBE = `(async () => {
   await waitFor('[data-testid="library"]', 'library view');
   (await waitFor('[data-testid="new-paper"]', 'new paper button')).click();
 
-  // New-paper dialog -> create with defaults.
+  // New-paper dialog -> pick a format, then create.
+  (await waitFor('[data-testid="format-mla"]', 'MLA format chip')).click();
   (await waitFor('[data-testid="create-paper"]', 'create paper button')).click();
 
   // Editor view with outline scaffold.
@@ -89,6 +90,12 @@ const PROBE = `(async () => {
 
   // Assignment decoder (the default tools tab): decode a prompt into a checklist.
   await waitFor('[data-testid="assignment-panel"]', 'assignment panel');
+
+  // Paper details: a format and heading that drive the export.
+  const details = await waitFor('[data-testid="paper-details"]', 'paper details');
+  details.open = true;
+  setValue(await waitFor('[data-testid="meta-name"]', 'student name field'), 'Ada Lovelace');
+  if (q('[data-testid="meta-name"]').value !== 'Ada Lovelace') throw new Error('heading name did not stick');
   const prompt = await waitFor('[data-testid="assignment-prompt"]', 'assignment prompt');
   setValue(
     prompt,

@@ -18,6 +18,8 @@ import type {
   ExportFormat,
   OutlineNode,
   Paper,
+  PaperFormat,
+  PaperMeta,
   PaperSummary,
   RequirementItem
 } from '@shared/types'
@@ -58,7 +60,7 @@ interface StoreState {
   replaceWordEverywhere: (word: string, replacement: string) => void
 
   // papers
-  createPaper: (input: { title: string; essayType: EssayType }) => Promise<void>
+  createPaper: (input: { title: string; essayType: EssayType; format?: PaperFormat }) => Promise<void>
   openPaper: (id: string) => Promise<void>
   closePaper: () => Promise<void>
   deletePaper: (id: string) => Promise<void>
@@ -66,6 +68,7 @@ interface StoreState {
   // editing
   setDoc: (doc: unknown) => void
   setTitle: (title: string) => void
+  setMeta: (patch: Partial<PaperMeta>) => void
   setScratch: (text: string) => void
   setDueDate: (date: string) => void
   setOutlineText: (id: string, text: string) => void
@@ -255,6 +258,13 @@ export const useStore = create<StoreState>()((set, get) => {
       const cur = get().current
       if (!cur) return
       set({ current: { ...cur, meta: { ...cur.meta, title } } })
+      scheduleSave()
+    },
+
+    setMeta(patch) {
+      const cur = get().current
+      if (!cur) return
+      set({ current: { ...cur, meta: { ...cur.meta, ...patch } } })
       scheduleSave()
     },
 

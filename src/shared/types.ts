@@ -2,6 +2,9 @@
 // Kept dependency-free so both the Electron main process and the renderer can
 // import them.
 
+import type { PaperFormat, PaperHeading } from './format'
+export type { PaperFormat, PaperHeading } from './format'
+
 export type EssayType = 'argument' | 'research' | 'lab' | 'thesis' | 'reflection'
 
 export const ESSAY_TYPE_LABELS: Record<EssayType, string> = {
@@ -46,6 +49,12 @@ export interface PaperMeta {
   wordGoal?: number
   /** Optional due date (YYYY-MM-DD) for the deadline back-planner. */
   dueDate?: string
+  /** Citation/layout style the export should follow. */
+  format?: PaperFormat
+  /** Student-supplied heading fields (name, instructor, course, date). */
+  heading?: PaperHeading
+  /** Whether the export numbers its pages. Defaults to on for set formats. */
+  pageNumbers?: boolean
 }
 
 /** One concrete, checkable requirement pulled from (or added to) the prompt. */

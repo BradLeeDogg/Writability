@@ -36,12 +36,16 @@ export function listPapers(): PaperSummary[] {
 export function createPaper(input: CreatePaperInput): Paper {
   const id = uid('paper')
   const now = new Date().toISOString()
+  const format = input.format ?? 'none'
   const meta: PaperMeta = {
     id,
     title: input.title?.trim() || 'Untitled paper',
     essayType: input.essayType,
     createdAt: now,
-    updatedAt: now
+    updatedAt: now,
+    format,
+    heading: {},
+    pageNumbers: format !== 'none'
   }
   ensureDir(paperDir(id))
   const content: Paper['content'] = {
