@@ -219,6 +219,32 @@ export async function runSelftest(): Promise<void> {
     assert.ok(decoded.requirements.some((r) => /at least 3 sources/i.test(r)), 'decoder finds source count')
     assert.ok(decoded.requirements.some((r) => /MLA/.test(r)), 'decoder finds citation style')
     assert.ok(decoded.requirements.some((r) => /thesis statement/i.test(r)), 'decoder finds thesis requirement')
+
+    // A rubric (bulleted criteria with point weights) should become a graded-on
+    // checklist — the part that used to be dropped.
+    const rubric = decodeAssignment(
+      'Write a 5-page essay. Your essay should make a clear argument.\n\n' +
+        'Rubric:\n' +
+        '- Thesis: a clear, arguable thesis (20 points)\n' +
+        '- Evidence: at least 4 credible sources (30 points)\n' +
+        '- Mechanics: grammar and spelling (10 points)\n'
+    )
+    assert.ok(
+      rubric.requirements.filter((r) => /^graded on:/i.test(r)).length >= 3,
+      'each rubric row becomes a graded-on item'
+    )
+    assert.ok(rubric.requirements.some((r) => /graded on:.*thesis/i.test(r)), 'rubric criterion text is kept')
+    assert.ok(rubric.requirements.some((r) => /20 points/.test(r)), 'point weights are preserved')
+    assert.ok(
+      rubric.requirements.some((r) => /should make a clear argument/i.test(r)),
+      'prose instructions are still captured alongside the rubric'
+    )
+
+    // Plain bullet points (no rubric heading) are captured as requirements.
+    const bullets = decodeAssignment(
+      'Your essay needs to:\n- discuss two causes\n- include a counterargument\n- end with a conclusion'
+    )
+    assert.ok(bullets.requirements.some((r) => /discuss two causes/i.test(r)), 'plain bullets are captured')
     pass('assignment decoder')
 
     // --- drafting bridge: scaffold + sentence split + transitions -------

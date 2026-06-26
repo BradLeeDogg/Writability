@@ -88,9 +88,18 @@ const PROBE = `(async () => {
   // Assignment decoder (the default tools tab): decode a prompt into a checklist.
   await waitFor('[data-testid="assignment-panel"]', 'assignment panel');
   const prompt = await waitFor('[data-testid="assignment-prompt"]', 'assignment prompt');
-  setValue(prompt, 'Write a 600-word essay. Analyse the theme. Use at least 3 sources in MLA style.');
+  setValue(
+    prompt,
+    'Write a 600-word essay. Analyse the theme. Use at least 3 sources in MLA style.\\n\\n' +
+      'Rubric:\\n- Thesis: clear and arguable (20 points)\\n- Evidence: uses the sources well (30 points)'
+  );
   (await waitFor('[data-testid="decode-assignment"]', 'decode button')).click();
   await waitFor('[data-testid="requirement-item"]', 'a decoded requirement');
+  // The rubric rows should be pulled out as graded-on items.
+  {
+    const items = [...document.querySelectorAll('[data-testid="requirement-item"]')].map((e) => e.textContent || '');
+    if (!items.some((t) => /Graded on:/i.test(t))) throw new Error('rubric criteria were not decoded into graded-on items');
+  }
 
   // Brain dump: a judgement-free scratch space.
   (await waitFor('[data-testid="tab-braindump"]', 'brain dump tab')).click();

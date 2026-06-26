@@ -36,7 +36,8 @@ export function AssignmentPanel(): JSX.Element {
     <div className="assignment" data-testid="assignment-panel">
       <p className="panel-intro">
         Paste your assignment instructions or rubric. Writability will explain the instruction
-        words in plain language and pull out a checklist of what to do.
+        words in plain language and pull out a checklist of what to do — including each rubric
+        criterion you’ll be graded on.
       </p>
 
       <textarea
