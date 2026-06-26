@@ -146,6 +146,8 @@ export interface AppSettings {
   spotlightMode: boolean
   /** A tinted reading guide band that follows the pointer across the page. */
   readingRuler: boolean
+  /** Show the editor as the printed page (double-spaced, indented, on white). */
+  printLayout: boolean
   /** Underline known academic terms with a hover-to-define tooltip. */
   defineTerms: boolean
   /** Gently underline likely misspellings and offer suggestions. */
@@ -193,6 +195,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   focusMode: false,
   spotlightMode: false,
   readingRuler: false,
+  printLayout: false,
   defineTerms: false,
   spellHelp: true,
   homophoneHelp: false,

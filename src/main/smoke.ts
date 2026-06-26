@@ -156,6 +156,14 @@ const PROBE = `(async () => {
   (await waitFor('[data-testid="toggle-spotlight"]', 'spotlight toggle')).click();
   await waitFor('.editor-surface.spotlight', 'spotlight mode applied');
 
+  // Print layout: the editor takes on the printed-page look.
+  (await waitFor('[data-testid="toggle-print-layout"]', 'print-layout toggle')).click();
+  await sleep(60);
+  if (document.documentElement.dataset.printLayout !== 'true') throw new Error('print layout did not turn on');
+  (await waitFor('[data-testid="toggle-print-layout"]', 'print-layout toggle off')).click();
+  await sleep(60);
+  if (document.documentElement.dataset.printLayout !== 'false') throw new Error('print layout did not turn off');
+
   // Reading ruler: enable it, then move the pointer over the page to reveal the band.
   (await waitFor('[data-testid="toggle-ruler"]', 'reading-ruler toggle')).click();
   await sleep(80);

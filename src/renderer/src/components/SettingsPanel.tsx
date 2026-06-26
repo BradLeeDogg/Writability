@@ -211,6 +211,16 @@ export function SettingsPanel(): JSX.Element {
       <label className="toggle">
         <input
           type="checkbox"
+          data-testid="toggle-print-layout"
+          checked={settings.printLayout}
+          onChange={(e) => update({ printLayout: e.target.checked })}
+        />
+        <span>Print layout (see the page double-spaced and indented, as it exports)</span>
+      </label>
+
+      <label className="toggle">
+        <input
+          type="checkbox"
           data-testid="toggle-define"
           checked={settings.defineTerms}
           onChange={(e) => update({ defineTerms: e.target.checked })}

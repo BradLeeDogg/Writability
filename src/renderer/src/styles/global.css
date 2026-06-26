@@ -1333,6 +1333,28 @@ fieldset.field {
   letter-spacing: var(--letter-spacing);
   box-shadow: var(--shadow);
 }
+/* Print layout: show the editor as the page it will export to — a letter-width
+   white sheet, double-spaced, with a first-line indent. Keeps the student's
+   reading font (the export itself uses Times New Roman). */
+:root[data-print-layout='true'] .editor-scroll {
+  background: var(--surface-2);
+}
+:root[data-print-layout='true'] .editor-surface {
+  max-width: 8.5in;
+}
+:root[data-print-layout='true'] .prose {
+  background: #ffffff;
+  color: #111111;
+  border-color: #dddddd;
+  padding: 1in;
+  line-height: 2;
+  letter-spacing: normal;
+}
+:root[data-print-layout='true'] .prose p {
+  text-indent: 0.5in;
+  margin: 0;
+}
+
 .prose:focus {
   outline: none;
 }

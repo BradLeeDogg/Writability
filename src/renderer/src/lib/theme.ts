@@ -10,6 +10,7 @@ export function applySettings(s: AppSettings): void {
   root.dataset.overlay = s.overlayTint
   root.dataset.focus = String(s.focusMode)
   root.dataset.reduceMotion = String(s.reduceMotion)
+  root.dataset.printLayout = String(s.printLayout)
 
   root.style.setProperty('--font-scale', String(s.fontScale))
   root.style.setProperty('--line-spacing', String(s.lineSpacing))
