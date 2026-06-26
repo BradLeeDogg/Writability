@@ -2,6 +2,8 @@
 // Pure and dependency-free so the main process (export, self-test) and the
 // renderer can share them.
 
+import { applyCase, normalizeWord } from './spelling'
+
 interface DocNode {
   type?: string
   text?: string
@@ -59,6 +61,29 @@ export function countWords(text: string): number {
 /** A fresh, empty TipTap document. */
 export function emptyDoc(): unknown {
   return { type: 'doc', content: [{ type: 'paragraph' }] }
+}
+
+/**
+ * Replace every whole-word occurrence of `target` with `replacement`, matching
+ * case-insensitively (curly apostrophes normalised) and preserving each
+ * occurrence's capitalisation. Token-based, so it never touches substrings.
+ * Returns a new document; the input is left untouched.
+ */
+export function replaceWordInDoc(doc: unknown, target: string, replacement: string): unknown {
+  const targetLower = normalizeWord(target).toLowerCase()
+  if (!targetLower) return doc
+  const wordRe = /[A-Za-z'’]+/g
+  const fix = (node: DocNode): DocNode => {
+    if (typeof node.text === 'string') {
+      const next = node.text.replace(wordRe, (tok) =>
+        normalizeWord(tok).toLowerCase() === targetLower ? applyCase(tok, replacement) : tok
+      )
+      return next === node.text ? node : { ...node, text: next }
+    }
+    if (node.content) return { ...node, content: node.content.map(fix) }
+    return node
+  }
+  return fix(doc as DocNode)
 }
 
 export interface Sentence {

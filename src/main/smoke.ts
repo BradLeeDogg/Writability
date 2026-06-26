@@ -113,7 +113,7 @@ const PROBE = `(async () => {
   q('[data-testid="tab-clarity"]').dispatchEvent(
     new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true })
   );
-  await waitFor('[data-testid="citations-panel"]', 'ArrowRight moves to the next tab');
+  await waitFor('[data-testid="spelling-panel"]', 'ArrowRight moves to the next (Spelling) tab');
 
   (await waitFor('[data-testid="tab-citations"]', 'citations tab')).click();
   await waitFor('[data-testid="citations-panel"]', 'citations panel');
@@ -185,6 +185,25 @@ const PROBE = `(async () => {
   }
   if (!gone) throw new Error('word still flagged after adding it to the dictionary');
   await waitFor('[data-testid="my-word"]', 'the taught word appears in My words');
+
+  // Spelling summary panel: lists flagged words and fixes every occurrence at once.
+  prose.focus();
+  document.execCommand('insertText', false, ' I will recieve it and recieve more. ');
+  (await waitFor('[data-testid="tab-spelling"]', 'spelling tab')).click();
+  await waitFor('[data-testid="spelling-panel"]', 'spelling panel');
+  let summaryRow = null;
+  for (let i = 0; i < 100; i++) {
+    summaryRow = [...document.querySelectorAll('[data-testid="spell-summary-word"]')].find((e) => e.textContent === 'recieve');
+    if (summaryRow) break;
+    await sleep(80);
+  }
+  if (!summaryRow) throw new Error('misspelling not listed in the spelling panel');
+  const fixAll = [...document.querySelectorAll('[data-testid="spell-summary-suggestion"]')].find((b) => b.textContent === 'receive');
+  if (!fixAll) throw new Error('no "receive" suggestion in the spelling panel');
+  fixAll.click();
+  await sleep(250);
+  if (q('.prose').textContent.includes('recieve')) throw new Error('fix-all left a misspelling behind');
+  if ((q('.prose').textContent.match(/receive/g) || []).length < 2) throw new Error('fix-all did not replace both occurrences');
 
   // Toggle a setting to exercise the live theming path.
   const themeBtn = q('[data-testid="theme-calm-dark"]');

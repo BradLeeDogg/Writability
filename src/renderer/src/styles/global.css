@@ -1200,6 +1200,44 @@ fieldset.field {
   font-size: 0.82rem;
 }
 
+/* Spelling summary panel */
+.spell-clear {
+  color: var(--accent);
+  font-weight: 600;
+}
+.spell-subhead {
+  margin: 1rem 0 0.4rem;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+.spell-row {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.5rem 0.6rem;
+  margin-bottom: 0.5rem;
+  background: var(--surface);
+}
+.spell-row-head {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  margin-bottom: 0.4rem;
+}
+.spell-row-word {
+  font-weight: 700;
+  color: var(--text);
+}
+.spell-row-count {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+.spell-row .spell-hint {
+  margin: 0 0 0.4rem;
+}
+.ghost-chip {
+  color: var(--text-muted);
+}
+
 /* Reading guide band that tracks the pointer (see Editor.tsx). */
 .reading-ruler {
   position: absolute;

@@ -4,16 +4,18 @@ import { AssignmentPanel } from './AssignmentPanel'
 import { BrainDumpPanel } from './BrainDumpPanel'
 import { ReadingPanel } from './ReadingPanel'
 import { ClarityPanel } from './ClarityPanel'
+import { SpellingPanel } from './SpellingPanel'
 import { CitationsPanel } from './CitationsPanel'
 import { SettingsPanel } from './SettingsPanel'
 
-type ToolsTab = 'assignment' | 'braindump' | 'reading' | 'clarity' | 'citations' | 'settings'
+type ToolsTab = 'assignment' | 'braindump' | 'reading' | 'clarity' | 'spelling' | 'citations' | 'settings'
 
 const TABS: { id: ToolsTab; label: string }[] = [
   { id: 'assignment', label: 'Assignment' },
   { id: 'braindump', label: 'Brain dump' },
   { id: 'reading', label: 'Understand' },
   { id: 'clarity', label: 'Clarity' },
+  { id: 'spelling', label: 'Spelling' },
   { id: 'citations', label: 'Citations' },
   { id: 'settings', label: 'Settings' }
 ]
@@ -75,6 +77,7 @@ export function ToolsPanel(): JSX.Element {
         {tab === 'braindump' && <BrainDumpPanel />}
         {tab === 'reading' && <ReadingPanel />}
         {tab === 'clarity' && <ClarityPanel />}
+        {tab === 'spelling' && <SpellingPanel />}
         {tab === 'citations' && <CitationsPanel />}
         {tab === 'settings' && <SettingsPanel />}
       </div>

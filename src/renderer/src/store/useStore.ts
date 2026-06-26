@@ -5,6 +5,8 @@ import { splitIntoItems } from '@shared/ai'
 import { uid } from '@shared/ids'
 import { insertNoteUnder, makeBodyParagraph, nextBodyParagraphNumber } from '@shared/outline-templates'
 import { mergeCustomWord } from '@shared/spelling'
+import { replaceWordInDoc } from '@shared/doc'
+import type { Editor as TiptapEditor } from '@tiptap/react'
 import type { AiRunInput, AiRunResult, BackupResult, ExportResult, RestoreResult } from '@shared/api'
 import { CARD_COLORS, DEFAULT_SETTINGS } from '@shared/types'
 import type {
@@ -21,7 +23,7 @@ import type {
 } from '@shared/types'
 
 type View = 'library' | 'editor'
-type ToolsTab = 'assignment' | 'braindump' | 'reading' | 'clarity' | 'citations' | 'settings'
+type ToolsTab = 'assignment' | 'braindump' | 'reading' | 'clarity' | 'spelling' | 'citations' | 'settings'
 type SaveState = 'idle' | 'saving' | 'saved' | 'error'
 
 interface StoreState {
@@ -49,6 +51,11 @@ interface StoreState {
   updateSettings: (patch: Partial<AppSettings>) => void
   addCustomWord: (word: string) => void
   removeCustomWord: (word: string) => void
+  /** The live TipTap editor, registered by the Editor while a paper is open. */
+  editorInstance: TiptapEditor | null
+  setEditorInstance: (editor: TiptapEditor | null) => void
+  /** Replace every occurrence of a word in the open paper (used by the Spelling panel). */
+  replaceWordEverywhere: (word: string, replacement: string) => void
 
   // papers
   createPaper: (input: { title: string; essayType: EssayType }) => Promise<void>
@@ -195,6 +202,19 @@ export const useStore = create<StoreState>()((set, get) => {
       get().updateSettings({
         customWords: get().settings.customWords.filter((w) => w.toLowerCase() !== lower)
       })
+    },
+
+    editorInstance: null,
+
+    setEditorInstance(editor) {
+      set({ editorInstance: editor })
+    },
+
+    replaceWordEverywhere(word, replacement) {
+      const ed = get().editorInstance
+      if (!ed || ed.isDestroyed) return
+      const next = replaceWordInDoc(ed.getJSON(), word, replacement)
+      ed.commands.setContent(next as never, true) // emitUpdate -> onUpdate persists
     },
 
     async createPaper(input) {

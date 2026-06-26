@@ -16,7 +16,7 @@ import { TRANSITIONS } from '@shared/transitions'
 import { GLOSSARY, glossaryMap } from '@shared/glossary'
 import { summarizeSource } from '@shared/reading'
 import { formatCitation } from '@shared/citations'
-import { docToPlainText, splitSentences, sentenceIndexAt, splitWords, wordIndexAt } from '@shared/doc'
+import { docToPlainText, splitSentences, sentenceIndexAt, splitWords, wordIndexAt, replaceWordInDoc } from '@shared/doc'
 import { coachContext } from '@shared/coach'
 import { pickVoice, sortVoices } from '@shared/voices'
 import { applyCase, confusableFor, looksLikeWord, mergeCustomWord, rankSuggestions } from '@shared/spelling'
@@ -435,6 +435,21 @@ export async function runSelftest(): Promise<void> {
     assert.deepEqual(mergeCustomWord(['a'], 'b2'), ['a'], 'words with digits are rejected')
     assert.deepEqual(mergeCustomWord(['a'], '   '), ['a'], 'blank input is rejected')
     pass('gentle spelling helpers')
+
+    // --- whole-paper "fix everywhere" (pure) ----------------------------
+    const spellDoc = {
+      type: 'doc',
+      content: [
+        { type: 'paragraph', content: [{ type: 'text', text: 'I beleive it. Beleive me, beleives differ.' }] }
+      ]
+    }
+    const fixedDoc = replaceWordInDoc(spellDoc, 'beleive', 'believe')
+    const fixedText = docToPlainText(fixedDoc)
+    assert.ok(fixedText.includes('I believe it.'), 'replaces an occurrence')
+    assert.ok(fixedText.includes('Believe me'), 'preserves capitalisation of each occurrence')
+    assert.ok(fixedText.includes('beleives differ'), 'leaves different words (substrings) alone')
+    assert.equal(docToPlainText(spellDoc).includes('beleive'), true, 'the original doc is not mutated')
+    pass('fix spelling everywhere')
 
     // --- promote board cards into outline sections (pure) ---------------
     const baseOutline = makeOutline('argument')

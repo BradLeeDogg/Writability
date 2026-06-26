@@ -24,6 +24,7 @@ export function Editor(): JSX.Element {
   const homophoneHelp = useStore((s) => s.settings.homophoneHelp)
   const customWords = useStore((s) => s.settings.customWords)
   const addCustomWord = useStore((s) => s.addCustomWord)
+  const setEditorInstance = useStore((s) => s.setEditorInstance)
 
   const editor = useEditor({
     extensions: [
@@ -88,6 +89,12 @@ export function Editor(): JSX.Element {
     setCustomWords(customWords)
     if (editor) editor.view.dispatch(editor.state.tr.setMeta(spellcheckKey, { bump: true }))
   }, [editor, customWords])
+
+  // Expose the editor so panels (e.g. Spelling) can act on the document.
+  useEffect(() => {
+    setEditorInstance(editor ?? null)
+    return () => setEditorInstance(null)
+  }, [editor, setEditorInstance])
 
   // Clicking a spelling mark opens the fix popover. Delegated from the page so
   // it works without ProseMirror's own click plumbing.
