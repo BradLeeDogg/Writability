@@ -70,59 +70,81 @@ function writePaper(meta, content) {
 }
 
 const now = new Date().toISOString()
-const stale = new Date(Date.now() - 21 * 864e5).toISOString() // 3 weeks ago
+const daysAgo = (d) => new Date(Date.now() - d * 864e5).toISOString()
+const today = new Date().toISOString().slice(0, 10)
 const baseMeta = (id, title, essayType, extra = {}) => ({
-  id, title, essayType, createdAt: stale, updatedAt: now, format: 'mla',
-  heading: { studentName: 'Jordan Rivera', instructor: 'Dr. Okafor', course: 'HIST 301', date: '1 Jul 2026' },
+  id, title, essayType, createdAt: daysAgo(30), updatedAt: now, format: 'mla',
+  heading: { studentName: 'Sam Ortiz', instructor: 'Prof. Adeyemi', course: 'ENG 210', date: today },
   pageNumbers: true, ...extra
 })
 
-// 1. "Novel-scale" long paper: ~15,000 words, 12 sections, 60 board cards, mixed outline states.
-writePaper(baseMeta('fx_long', 'The Long Thesis Paper (15k words)', 'thesis', { wordGoal: 15000, dueDate: '2026-07-20' }), {
-  doc: doc(15000, 12),
-  outline: [node('thesis', 'Thesis', 'Institutions, not individuals, drove the change.', true),
-    ...Array.from({ length: 12 }, (_, i) => node('point', `Point ${i + 1}`, `Working claim ${i + 1}`, i < 5,
-      [node('evidence', 'Evidence', i < 5 ? 'Cited below' : '', i < 5), node('analysis', 'Analysis', '', false)]))],
-  sources: Array.from({ length: 40 }, (_, i) => src(i + 1, ['article', 'book', 'web'][i % 3])),
-  assignment: { prompt: 'Write a 15,000-word thesis. Use at least 30 scholarly sources in MLA style.\nRubric:\n- Argument: clear and sustained (40 points)\n- Evidence: sources used critically (40 points)\n- Mechanics (20 points)',
-    requirements: [req('Write at least 15000 words.', false), req('Use at least 30 sources.', true),
-      req('Graded on: Argument: clear and sustained (40 points)', false),
-      req('Graded on: Evidence: sources used critically (40 points)', false)] },
-  scratch: 'Ideas parking lot: revisit chapter 3 framing; ask Dr. O about archive access.',
-  cards: Array.from({ length: 60 }, (_, i) => card(i, `Idea ${i + 1}: a scene-level point to place`, undefined))
-})
-
-// 2. 400-word news brief, mid-draft (deadline persona).
-writePaper(baseMeta('fx_brief', 'Campus Water Main Break (news brief)', 'argument', { wordGoal: 400, dueDate: '2026-07-02', format: 'none' }), {
-  doc: doc(220, 1), outline: [node('thesis', 'Nut graf', 'Water restored by 6pm, classes resume Monday.', false)],
-  sources: [src(1, 'web'), src(2, 'web')],
-  assignment: { prompt: 'File a 400-word brief by 6pm. Two sources minimum. AP-adjacent style.', requirements: [req('Write about 400 words.', false), req('Use at least 2 sources.', true)] },
+// 1. College argumentative essay, APA, WITH detailed rubric (6-8 pages, 5 scholarly sources).
+writePaper(baseMeta('fx_apa_rubric', 'Social Media and Civic Trust (APA, rubric)', 'argument', { format: 'apa', wordGoal: 2000, dueDate: daysAgo(-10).slice(0, 10) }), {
+  doc: doc(900, 3),
+  outline: [node('thesis', 'Thesis', 'Platform design, not user behavior, erodes civic trust.', true),
+    node('point', 'Point 1', 'Engagement metrics reward outrage', true, [node('evidence', 'Evidence', 'Author 2 study', true), node('analysis', 'Analysis', '', false)]),
+    node('point', 'Point 2', 'Moderation opacity', false), node('point', 'Point 3', '', false),
+    node('section', 'Counterargument', '', false), node('section', 'Conclusion', '', false)],
+  sources: Array.from({ length: 5 }, (_, i) => src(i + 1, 'article')),
+  assignment: { prompt: 'Write a 6-8 page argumentative essay (APA 7). Use at least five scholarly sources. You must include a counterargument.\nRubric:\n- Thesis: arguable, specific (20 points)\n- Evidence: five scholarly sources integrated, not dropped in (30 points)\n- Organization: clear paragraphs with transitions (20 points)\n- Citations: correct APA in-text and references (20 points)\n- Mechanics (10 points)',
+    requirements: [req('Write about 2000 words.', false), req('Use at least 5 sources.', true), req('Include a counterargument and respond to it.', false), req('Graded on: Citations: correct APA in-text and references (20 points)', false)] },
   scratch: '', cards: []
 })
 
-// 3. Dissertation-scale: 5 chapters, 200 references (APA).
+// 2. Same assignment, VAGUE version — the primary-persona fixture. Blank page.
+writePaper(baseMeta('fx_vague', 'Memory in Beloved (vague prompt)', 'argument', { format: 'mla', wordGoal: 2000 }), {
+  doc: { type: 'doc', content: [{ type: 'paragraph' }] },
+  outline: [node('thesis', 'Thesis', '', false), node('point', 'Point 1', '', false), node('point', 'Point 2', '', false), node('point', 'Point 3', '', false), node('section', 'Counterargument', '', false), node('section', 'Conclusion', '', false)],
+  sources: [], assignment: { prompt: 'Discuss the role of memory in Beloved.', requirements: [] }, scratch: '', cards: []
+})
+
+// 3. High-school five-paragraph persuasive essay with teacher rubric (504-plan persona).
+writePaper(baseMeta('fx_hs5', 'Should School Start Later? (5-paragraph)', 'argument', { format: 'mla', wordGoal: 600, heading: { studentName: 'Riley Chen', instructor: 'Ms. Park', course: 'English 10', date: today } }), {
+  doc: doc(180, 1),
+  outline: [node('thesis', 'Thesis', 'School should start at 9am.', true), node('point', 'Point 1', 'Sleep science', true), node('point', 'Point 2', 'Grades improve', false), node('point', 'Point 3', '', false), node('section', 'Conclusion', '', false)],
+  sources: [src(1, 'web'), src(2, 'web')],
+  assignment: { prompt: 'Write a five-paragraph persuasive essay.\nRubric:\n- Clear thesis in the first paragraph (5 points)\n- Three body paragraphs, each with one reason and one example (15 points)\n- Conclusion restates thesis (5 points)\n- Spelling and grammar (5 points)',
+    requirements: [req('Graded on: Clear thesis in the first paragraph (5 points)', true), req('Graded on: Three body paragraphs, each with one reason and one example (15 points)', false)] },
+  scratch: '', cards: []
+})
+
+// 4. The messy brain-dump: ideas exist, structure does not — the core struggle.
+writePaper(baseMeta('fx_dump', 'Untitled paper (brain dump)', 'research', { format: 'mla' }), {
+  doc: { type: 'doc', content: [{ type: 'paragraph' }] },
+  outline: [node('thesis', 'Research question & thesis', '', false)],
+  sources: [src(1, 'book'), src(2, 'web')],
+  assignment: { prompt: '', requirements: [] },
+  scratch: 'quote about doors of memory p.117?? / rememory = place-memory / Sethe cant not remember / compare Baby Suggs sermon / TRAUMA IS NOT LINEAR - this is the thesis maybe? / that article on postmemory (find it) / bridge scene / milk scene do I even use this / 124 as a character?? / dont forget topic sentences',
+  cards: Array.from({ length: 25 }, (_, i) => card(i, ['rememory as geography', 'the house as antagonist', 'Paul D tobacco tin heart', 'Denver leaves the yard = growth', 'ghost = unprocessed grief'][i % 5] + ' (' + (i + 1) + ')', undefined))
+})
+
+// 5. Mid-draft abandoned three weeks ago (re-entry / burnout test).
+const staleDoc = doc(1200, 4)
+writePaper({ ...baseMeta('fx_stale', 'The Ethics of Predictive Policing', 'research', { wordGoal: 2500, dueDate: daysAgo(-7).slice(0, 10) }), updatedAt: daysAgo(21) }, {
+  doc: staleDoc,
+  outline: [node('thesis', 'Research question & thesis', 'Predictive policing launders bias through math.', true),
+    node('section', 'Background', 'done-ish', true), node('point', 'Point 1', 'Feedback loops', true), node('point', 'Point 2', 'Accountability gap', false), node('section', 'Conclusion', '', false)],
+  sources: Array.from({ length: 8 }, (_, i) => src(i + 1, ['article', 'web'][i % 2])),
+  assignment: { prompt: 'Research paper, 2500 words, MLA, 8 sources.', requirements: [req('Write about 2500 words.', false), req('Use at least 8 sources.', true)] },
+  scratch: 'STOPPED AT: rewrite the accountability section, it contradicts point 1', cards: []
+})
+
+// 6. Due at 11:59 TONIGHT, partial progress (ADHD persona).
+writePaper(baseMeta('fx_tonight', 'Rhetorical Analysis: MLK Letter (due tonight)', 'argument', { wordGoal: 1500, dueDate: today }), {
+  doc: doc(600, 2),
+  outline: [node('thesis', 'Thesis', 'MLK builds authority through kairos and pathos.', true),
+    node('point', 'Point 1', 'Kairos: the timing argument', true), node('point', 'Point 2', 'Pathos: the imagery', false), node('point', 'Point 3', '', false), node('section', 'Conclusion', '', false)],
+  sources: [src(1, 'book')],
+  assignment: { prompt: 'Rhetorical analysis, 1500 words, MLA, due 11:59pm.', requirements: [req('Write about 1500 words.', false)] },
+  scratch: '', cards: []
+})
+
+// 7. Dissertation-scale stress fixture kept from v1 (200 references, APA).
 writePaper(baseMeta('fx_diss', 'Dissertation: Attention & Interface Design', 'research', { format: 'apa', wordGoal: 40000 }), {
   doc: doc(8000, 5),
-  outline: Array.from({ length: 5 }, (_, i) => node('section', `Chapter ${i + 1}`, `Chapter ${i + 1} summary`, i < 2)),
+  outline: Array.from({ length: 5 }, (_, i) => node('section', `Chapter ${i + 1}`, '', i < 2)),
   sources: Array.from({ length: 200 }, (_, i) => src(i + 1, ['article', 'book', 'web'][i % 3])),
-  assignment: { prompt: 'Dissertation. APA 7. Five chapters. Committee review in October.', requirements: [] },
-  scratch: '', cards: []
+  assignment: { prompt: 'Dissertation. APA 7.', requirements: [] }, scratch: '', cards: []
 })
 
-// 4. Short reflection, minimal ceremony.
-writePaper(baseMeta('fx_short', 'Reflection on the internship', 'reflection', { format: 'none', wordGoal: 800 }), {
-  doc: doc(350, 1), outline: [node('thesis', 'Focus', '', false)], sources: [],
-  assignment: { prompt: '', requirements: [] }, scratch: '', cards: []
-})
-
-// 5. Book-proposal-like argument paper with annotated outline + cards sorted into sections.
-const propOutline = [node('thesis', 'Thesis', 'A trade book on attention is viable now.', true),
-  ...Array.from({ length: 8 }, (_, i) => node('section', `TOC ${i + 1}`, `Chapter ${i + 1}: annotated summary`, i < 3))]
-writePaper(baseMeta('fx_prop', 'Book Proposal: The Attention Ledger', 'argument', { format: 'chicago' }), {
-  doc: doc(3000, 3), outline: propOutline,
-  sources: Array.from({ length: 12 }, (_, i) => src(i + 1, 'book')),
-  assignment: { prompt: 'Proposal package: annotated TOC and two sample chapters. Chicago style.', requirements: [req('Include a title page.', true)] },
-  scratch: '', cards: Array.from({ length: 16 }, (_, i) => card(i, `Comp title ${i + 1}`, propOutline[1 + (i % 8)].id))
-})
-
-console.log('Seeded 5 papers into', papersDir)
+console.log('Seeded 7 cognitive-audit fixtures into', papersDir)

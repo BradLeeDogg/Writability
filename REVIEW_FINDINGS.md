@@ -1,177 +1,191 @@
-# Writability — Full UX & Persona Audit (Review Findings)
+# Writability — Cognitive Accessibility, UX & Persona Audit (v2)
 
-**Scope note (read first).** The audit brief referenced `SPEC.md`/`PLAN.md` and Scrivener-class personas (novelist, corkboard, Shunn compile). Neither file exists in this repository, and the app here is **Writability**: a calm, offline, accessibility-first paper writer for students (README is the de-facto spec). I audited the app **against its own ethos** — "calm, low-stimulus, nothing between the student and the page, fully offline, no judgment" — and adapted the personas to its real audience. Where the brief's persona had no Writability equivalent (e.g. Shunn manuscript compile), that is recorded honestly as out of scope rather than invented. Fixtures live in `/fixtures` (see below) and were used for every claim that needed scale.
+**Scope.** This supersedes the earlier generic UX audit on this branch. Brief: judge Writability as what it is — a calm, offline, accessibility-first writing tool for neurodivergent students (autistic students as primary audience) producing correctly formatted academic papers. No `SPEC.md`/`PLAN.md` exist; the README, welcome flow, and in-app copy are the de-facto spec, and the ethos used throughout is: *calm, predictable, literal, one thing at a time; the student is always the author; independence is the goal.*
 
-**Fixtures** (`fixtures/seed.cjs`, run: `ELECTRON_RUN_AS_NODE=1 npx electron fixtures/seed.cjs`, then `WP_DATA_DIR=fixtures/data npm run dev`):
-- `fx_long` — 15,000-word thesis paper, 12 sections, 40 sources, rubric-derived requirements in mixed states, 60 board cards.
-- `fx_brief` — 400-word news brief, mid-draft, 2 web sources, deadline today.
-- `fx_diss` — dissertation-scale research paper, 5 chapters, **200 references**, APA.
-- `fx_short` — 350-word reflection, no ceremony.
-- `fx_prop` — book-proposal-like argument paper, annotated 8-part TOC, 16 cards pre-sorted into sections, Chicago.
+**Evidence basis.** Source audit of every file cited; the app booted and passed its full UI smoke against the seeded fixtures (`WP_SMOKE_OK`); citation formatter, AI prompts, planner, and timer read line-by-line; spell-scan of a 15k-word doc benchmarked (~4 ms warm — typing latency is not a risk). Fixtures: `fixtures/seed.cjs` (run `ELECTRON_RUN_AS_NODE=1 npx electron fixtures/seed.cjs`, then `WP_DATA_DIR=fixtures/data npm run dev`):
 
-Verified: the app boots and passes its own smoke suite with these fixtures present (`WP_SMOKE_OK`), including the 200-reference paper.
+| id | scenario |
+|----|----------|
+| `fx_apa_rubric` | College argumentative essay, APA, detailed rubric, 5 scholarly sources |
+| `fx_vague` | Same course, prompt is only *"Discuss the role of memory in Beloved."* — blank page |
+| `fx_hs5` | High-school five-paragraph persuasive essay with teacher rubric |
+| `fx_dump` | Messy brain-dump: 25 unsorted cards + chaotic scratch notes, no structure |
+| `fx_stale` | Mid-draft abandoned 21 days ago; scratch says "STOPPED AT: rewrite the accountability section" |
+| `fx_tonight` | Due 11:59 tonight, 600 of 1500 words done |
+| `fx_diss` | 200-reference APA stress fixture |
 
 ---
 
 ## What's genuinely good — protect this
 
-1. **The empty states and microcopy.** "There is no rush here, and nothing you write is graded" is the product. Every panel intro is written to a nervous student, not a power user. Do not let future features add expert-tone copy.
-2. **Offline by default, AI strictly opt-in, key encrypted at rest** (`src/main/services/settings.ts`). The trust story is coherent; nothing phones home. Protect the "writing sent only when you press an AI button" contract.
-3. **The accessibility stack is real, not performative**: bundled Atkinson/OpenDyslexic (`src/renderer/src/main.tsx`), 4 AA themes + Irlen tints (`themes.css`), spotlight, reading ruler, word-level read-aloud with voice/pitch, gentle spelling with personal dictionary. Nielsen "flexibility" mostly passes because of this.
-4. **Format-correct export** (`src/main/services/export.ts`): MLA/APA/Chicago geometry verified against real rendered PDFs (heading block, title page, running headers, hanging indents). This is the app's hard deliverable; regression-test it forever (selftest already covers it).
-5. **Self-test discipline**: 28 pure checks + a full UI smoke (`src/main/selftest.ts`, `smoke.ts`). Rare in an app this size; keep the "every feature adds a check" norm.
-6. **One clear job per surface**: Outline (plan) / Editor (write) / Board (arrange) / Tools tabs (support). No surface does two things. IA is predictable.
+1. **The copy is the accessibility.** "There is no rush here, and nothing you write is graded." Every panel intro is literal, warm, and explains *why* ("so the reader sees the thread"). Outline prompts are concrete ("One clear sentence is enough"). This register is the product; defend it in review.
+2. **The assignment decoder is the right idea executed honestly** (`src/shared/assignment.ts`): command words explained literally with examples ("discuss = look at more than one side, then give a reasoned view"), rubric rows become checkable "Graded on:" items. This is hidden-curriculum translation — the core autistic-student need — done without AI.
+3. **AI is coach-bounded by construction** (`src/shared/ai.ts`): brainstorm = short phrases "not a sentence to copy"; outline = "Do not write the content itself"; feedback = questions. Off by default, local key, per-click consent. This is the strongest academic-integrity posture I have seen in a student tool. Freeze these prompts behind the existing selftest.
+4. **Sensory design is calm by default and adjustable fast**: 4 AA themes, Irlen tints, spotlight, reading ruler, reduce-motion kill-switch (`themes.css`, `theme.ts`), no sound anywhere, no autoplaying motion, no mascots, no streaks, no notifications. The anti-pattern sweep found **one** class of violation (native dialogs, F-10).
+5. **Executive-function scaffolding exists at every stage**: brain dump → board → send-card-to-outline-under-section → insert-outline-as-headings → thesis pin → next-step coach → back-planner ("N steps across D days" — arithmetic, not alarm). The pipeline from chaos to structure is real; `fx_dump` can be worked entirely inside it.
+6. **Format-correct export geometry** (MLA heading block/running header, APA title page) verified against rendered PDFs earlier on this branch, with selftest coverage.
 
-## Top 10 most consequential findings
+## Top 10 (ranked by consequence for the primary users)
 
 | # | ID | Sev | Finding |
 |---|----|-----|---------|
-| 1 | F-01 | **Blocker** | No find (let alone find & replace) anywhere — fatal in a 15k-word document |
-| 2 | F-02 | **Major** | No keyboard discoverability: no shortcut cheat sheet, no command palette, stock Electron menu with no app commands |
-| 3 | F-03 | **Major** | Destructive actions are permanent + `confirm()`-guarded only: delete paper/card/source/requirement have no undo |
-| 4 | F-04 | **Major** | No per-paper snapshots/history; only whole-library manual backup — trust gap for a paper due tomorrow |
-| 5 | F-05 | **Major** | Export success is silent (no path, no "open file") — a 5:55 p.m. writer cannot trust it blindly |
-| 6 | F-06 | **Major** | Save-state can show "error" with no retry, no explanation, no recovery path |
-| 7 | F-07 | **Major** | Quit-time save is a renderer `beforeunload` async IPC — plausibly lossy in the 700 ms debounce window; no main-process `will-quit` flush |
-| 8 | F-08 | **Major** | No in-text citation insertion — 200 sources formatted beautifully, but the writer hand-types every `(Author 12)` |
-| 9 | F-09 | **Major** (a11y) | Read-aloud has no pause, and click-a-word-to-resume is mouse-only — in the app's own flagship accessibility feature |
-| 10 | F-10 | **Major** | 8 `alert()`/`confirm()` native dialogs — jarring, off-theme, and off-ethos ("calm") at exactly the stressful moments |
+| 1 | N-01 | **Major** | The vague prompt — the primary persona's exact scenario — dead-ends: decoder finds "discuss" but produces zero requirements and no bridge to academic writing's unstated expectations |
+| 2 | I-01 | **Major** | Every exported citation violates MLA/APA: no italics anywhere (plain-text formatter + plain TextRun export). "Almost right" costs real grades on the app's core promise |
+| 3 | F-04 | **Major** | No version history/snapshots; deletes of cards/sources/requirements are permanent. A lost paragraph can end the week |
+| 4 | F-07 | **Major** | Quit-time save is an async `beforeunload` race (`App.tsx:33`); last ~700 ms of typing plausibly lost on close |
+| 5 | N-02 | **Major** | Nothing interrupts the perfectionism loop; spelling marks are on by default *while drafting*, inviting sentence-polishing on line one |
+| 6 | F-10 | **Major** | 8 native `alert()`/`confirm()` dialogs: surprise modals in a different visual language at the most stressful moments |
+| 7 | F-09 | **Major** | Read-aloud (flagship a11y feature) has no pause and word-resume is mouse-only |
+| 8 | N-12 | **Major** | Re-entry after 3 weeks: no "here's where you were, here's the next small step." The fixture's own "STOPPED AT" note is buried in Brain dump |
+| 9 | F-05/F-06 | **Major** | Trust at the edges: export success is silent; save-"error" state offers no retry or rescue |
+| 10 | I-04 | **Major** | No scaffolding fade: prompts and templates are identical on paper #1 and paper #30 — the app never steps back as competence grows |
 
 ---
 
-## Part 1 — UX professional audit
+## Part 1 — Cognitive accessibility & UX audit
 
-### Heuristic sweep (Nielsen)
+### Cognitive load & focus
+- **One next action:** Library → "New paper" is clear; editor's placeholder ("Start writing here. You can begin anywhere") plus the outline's highlighted **Your next step** card answer "what now?" without inference. Pass — protect.
+- **N-11 (Minor):** Settings is one undifferentiated ~20-control column (`SettingsPanel.tsx`). The dyslexia preset (protect) rescues first contact, but a sensory-overloaded student scanning for "turn off underlines" reads the whole list. Group into 3–4 collapsed sections with the preset on top.
+- **F-13 (Polish):** 7 tools tabs; "Clarity" and "Spelling" are both "review my writing" — conceptual overlap adds a decision.
 
-**Visibility of system status — partial pass.**
-- Save state chip (`Toolbar.tsx` `SAVE_LABELS`, `aria-live`) is exactly right. **F-06 (Major):** the `'error'` state renders as text with no affordance. Repro: make `WP_DATA_DIR` read-only, type, watch the chip; nothing tells you what to do. Files: `src/renderer/src/store/useStore.ts` (`save()`), `Toolbar.tsx`.
-- **F-05 (Major):** `onExport` only surfaces *failure* (`Toolbar.tsx:34`); success returns a path that is thrown away. Repro: Export → docx → save; no confirmation, no reveal-in-folder.
-- Word/page footer (words · ≈pages · words-to-fill) is good status; protect.
+### Executive function scaffolding
+- Task breakdown, visible progress (n/N done), honest back-planning: pass (see protect #5).
+- **N-03 (Minor):** Transition seams: research→outline is unassisted (sources live in a tab, the outline never references them — you cannot attach a source to a Point); revise has no stage of its own (see N-02). The board→outline→draft seams are excellent.
+- **N-05 (Minor):** Working-memory offload exists (Brain dump tab) but capturing a fleeting thought mid-sentence requires leaving the editor (click Tools → Brain dump → type → click back; 4+ interactions and a context loss). No quick-capture.
+- **N-04 (Minor):** Words-remaining and days-remaining both exist but never meet ("~500 words/day would finish this" is computable from existing planner data and would serve time-blindness without pressure).
 
-**Match with real world — pass.** Command-word decoder, plain-language hints, "Graded on:" items. Best-in-class copy for the audience.
+### Language of the interface
+- Register is literal, concrete, mostly why-explaining. High-school fixture copy reads fine for 15 (no condescension found). Two blemishes: **N-10 (Polish):** "Irlen-style" jargon in a settings comment surfaces nowhere user-facing (ok), but "measure in ch" units and "letter spacing 0.01em" leak unit jargon into Settings labels' value readouts; round to plain words ("narrow / wide"). No idioms, no "just/simply" found in a sweep of user-facing strings.
 
-**User control & undo — fails outside the editor.**
-- Editor: TipTap history is fine (verified bold/type/undo in smoke-driven runs). "Fix everywhere" (`replaceWordEverywhere`, `useStore.ts`) is one undo step but discards cursor position (Minor).
-- **F-03 (Major):** deleting a paper (`Library.tsx:129`), card (`Board.tsx`), source, or requirement is permanent; outline text edits and board moves/section changes have no undo stack at all. The ethos promise "nothing you do here can be ruined" is not kept by the data layer. Repro: delete a card → no recovery.
-- **F-04 (Major):** no snapshots. `backup.ts` is all-or-nothing, user-initiated, exports a file. A student who mangles a chapter at 1 a.m. has nothing. Repro: open `fx_long`, delete three sections, close.
+### Predictability & consistency
+- Same action/place/result holds throughout; nothing moves spontaneously; autosave chip is honest. **F-10 (Major):** the exceptions are the 8 `alert()`/`confirm()` sites (grep `alert(|confirm(` in `src/renderer`) — OS-styled surprise modals for delete, restore, read-aloud-unavailable, export-failure. Exactly the moments a shutdown-prone student needs the app to stay itself.
+- **F-03 (Major):** Undo covers only the editor. Card/source/requirement deletion is permanent with no confirm (cards) or `confirm()` (paper). Repro: Board → × on a card → gone.
+- **F-07 (Major):** `beforeunload` fires an async IPC save the window teardown does not await; combined with the 700 ms debounce (`useStore.ts:141`) a fast Alt+F4 after typing can drop text. Needs main-process close interception. (Marked for the manual list — could not empirically race it headless.)
 
-**Consistency & standards — partial.**
-- **F-02 (Major):** the application menu is Electron's stock template (no code sets a Menu in `src/main/index.ts`). File menu has no Export; there is no shortcut for Focus, Read-aloud, Board, panels, or Export. Ctrl+B/I/Z work only because TipTap/Chromium provide them. macOS users get a menu that lies about the app.
-- **F-10 (Major):** native `alert()`/`confirm()` in 8 places (grep `alert(|confirm(` under `src/renderer`). On Windows these are modal system dialogs in a different visual language; under stress (delete, restore, export-fail) the calm app suddenly shouts.
+### Sensory design
+- Pass overall (protect #4). **F-25 (Major, verify):** print-layout hardcodes a white sheet (`global.css` `:root[data-print-layout='true'] .prose { background:#fff }`) — in calm-dark or high-contrast this is a full-screen luminance blast, the single worst sensory surprise available in the app. Repro: high-contrast theme → Settings → Print layout.
+- Density is adjustable (spacing sliders); no flashing anywhere; timer is opt-in and silent.
 
-**Error prevention — mixed.** Autosave debounce 700 ms (`useStore.ts:141`) + `beforeunload` flush (`App.tsx:33`). **F-07 (Major):** the flush calls an async IPC save during `beforeunload`; Electron does not wait for it. Close within the debounce window and the last keystrokes are plausibly lost. Needs a main-process `will-quit`/window-close interception that awaits a final save. (Could not fully verify loss empirically headless — on the manual list.)
+### Feedback tone & error states
+- Clarity panel and AI feedback are specific and kind by design (protect). Spelling popover's "Leave it" is the right non-judgment.
+- **The app's worst error message** (as briefed): `alert('Export failed: unknown error')` (`Toolbar.tsx`) — modal, technical, no cause, no next step, at a deadline moment. Runner-up: save chip silently reading "error" (**F-06**) with no retry affordance and no path to rescue the text.
+- **F-05 (Major):** export *success* is silent — no filename, no "open it." At 11:59 p.m. the student cannot verify the artifact exists without a file-manager hunt.
 
-**Recognition over recall — fails for keyboard users.** **F-02** again: minimalism without a summonable cheat sheet or palette is hidden UI. There is no way inside the app to learn that arrows move tabs, Esc closes the reader, or that TipTap shortcuts exist.
+### Customization without choice-overload
+- Sane defaults + preset: pass. N-11 grouping applies.
 
-**Flexibility & efficiency — strong for reading, weak for navigating.**
-- **F-01 (Blocker):** no Ctrl+F. In `fx_long` (15k words) the only way to reach a passage is scrolling. No project-wide search either (Library has no filter — **F-11, Minor→Major at scale**; repro: seed 30 papers, find one).
-- **F-12 (Minor):** Focus mode has no shortcut and Esc does not exit it.
+### Assistive tech interoperability
+- 49 `aria-label`s, ARIA tablist with roving tabindex, `aria-live` save chip, focus-ring tokens: strong.
+- **F-09 (Major):** `ReadAloudOverlay.tsx` — no pause/resume (only Start over / Done) and `reader-word` spans are click-only (no tabindex/key handling). The app's own headline feature fails keyboard-only and interruption-tolerance.
+- **F-14 (Minor):** `SpellPopover.tsx` never moves focus into itself; keyboard users tab blind to reach suggestions.
+- Dictation: no in-app support; OS dictation into the contenteditable should work but is unverified (manual list). TTS on own draft: yes (protect).
+- **F-01 (Blocker):** No find (or replace) in-document or across papers. For working-memory-limited users, "scroll and re-read until you spot it" is the single most expensive operation in the app. Repro: `fx_stale`, locate "accountability."
 
-**Aesthetic & minimalist — pass**, with one caveat: the Tools panel is now 7 tabs; "Spelling" and "Clarity" overlap conceptually (both are "review my writing"). Watch tab creep (F-13, Polish).
-
-**Recover from errors — see F-03/F-04/F-06.**
-
-**Help & documentation — the 3-step welcome is good; there is no reference beyond it (ties to F-02).**
-
-### Performance (with fixtures — measured)
-- Full-document nspell scan of 15,000 words: **3–4 ms warm** (measured via `ELECTRON_RUN_AS_NODE` benchmark; dictionary build 111 ms, correctly deferred off the critical path in `lib/spell.ts`). Spellcheck-per-keystroke is not a latency risk; decoration rebuild is capped (`MAX_SPELL_DECOS = 300`).
-- App boots and smokes clean with `fx_diss` (200 sources) present.
-- **Unverified (manual list):** real typing latency in `fx_long` with spotlight+ruler+print-layout all on; Clarity panel's `analyzeClarity` re-run per keystroke on 15k words while the tab is open (`ClarityPanel.tsx` `useMemo` on `doc`); citation list re-render with 200 sources while typing.
-
-### Accessibility
-- 49 `aria-label`s, tablist keyboard model, `aria-live` save chip, reduce-motion kill-switch, focus-ring tokens, high-contrast theme: genuinely strong.
-- **F-09 (Major):** `ReadAloudOverlay.tsx` — no pause/resume (only Start over/Done), and `reader-word` spans are click-only (`data-wi` spans, no `tabindex`, no key handler). The flagship accessibility feature is not keyboard-accessible or interrupt-tolerant. Repro: open Read to me; try to pause with Space; try to move the highlight without a mouse.
-- **F-14 (Minor):** `SpellPopover.tsx` does not move focus into itself on open (focus stays in the document; Esc works, but a keyboard user can't reach the suggestion chips without tabbing blind).
-- **F-15 (Minor):** Board free-canvas drag is pointer-only; mitigated because the section `<select>` covers re-filing, but x/y arrangement has no keyboard path (acceptable; document it).
-
-### Platform conventions
-- **F-16 (Minor):** window close = quit on all platforms except macOS hide semantics are default-Electron; fine, but no app menu (F-02) means no standard `Cmd+,` for settings, no File→Export.
-
-### Information architecture
-- Predictable (see "protect"). One misplacement: **F-17 (Minor):** "Paper details & format" (heading, page numbers) lives inside the **Assignment** tab; students looking to change format after creation will look in Settings or Export first. Repro: ask anyone where to change MLA→APA.
+### Trust & data safety
+- Autosave + atomic writes + WAL sqlite: good bones. **F-04 (Major):** no per-paper history/snapshots; only whole-library manual backup (`backup.ts`). Nothing visible to recover *to*.
 
 ---
 
-## Part 2 — Persona walkthroughs (adapted to Writability's audience)
+## Part 2 — Persona walkthroughs
 
-**P1. Deadline student journalist — `fx_brief` (400-word brief, due 6 p.m.)**
-Open app → paper restores via `lastPaperId` (good). Finish draft, clear two requirements, export.
-- Count to export: Export ▾ (1) → format (1) → OS save dialog (≥2) = 4–5 interactions, acceptable. **But** F-05: after "Save," silence. At 5:55 p.m. she re-exports twice "to be sure" — observed dead end, no path shown, no open-file.
-- F-01 bites even at 400 words: she wants to jump to "superintendent" to fix a name; no find.
-- Delight: save chip + word/page footer means she never wonders about state.
+**P1. Autistic college freshman — `fx_vague` (primary).**
+Opens paper → Assignment tab → pastes "Discuss the role of memory in Beloved." → **Break it down for me**.
+- Gets: command-word card for *discuss* (excellent, literal, with example). Requirements: none — note reads "No new requirements found. You can add your own below."
+- **N-01 (Major):** This is the moment the app exists for, and it shrugs. No bridge from vague prompt → the unstated expectations (you still need an arguable thesis; "discuss" at college means argue with evidence; default length/sources/style are course conventions; *here is a sentence to ask your professor*). The knowledge exists in the app (command words, outline template) but nothing connects them here.
+- Thesis writing: outline's thesis prompt + sentence frame ("I will show that ___ because ___") is genuinely good scaffolding once they find it.
+- **Perfectionism loop (N-02, Major):** eleventh rewrite of the opening sentence. The app's contribution: wavy spelling underlines live from word one (spellHelp default-on, `types.ts`), Clarity one tab away, no draft-stage concept, no "keep going, fix later" affordance. Nothing worsens the loop, nothing interrupts it. A "drafting mode" that defers marks until revision — plus one coach line ("First drafts are allowed to be rough") — is the ethos-true fix.
 
-**P2. Long-form student writer — `fx_long`**
-Reorder mid-revision: outline supports add/edit; board "By part" drag works well (protect). Working requirements from unchecked→checked is satisfying and visible (n/N done).
-- Friction: moving actual **document text** between sections is manual cut/paste with no split-view and no find (F-01). Scrolling 15k words to locate Section 8 took ~30s of trackpad in dev run.
-- "Fact-check packet" equivalent: none — requirements print nowhere. Exporting the checklist with the paper for a teacher/peer reviewer is a genuine, ethos-compatible gap (**F-18, Minor**).
+**P2. Autistic student — sensory profile.**
+Time-to-tolerable from first launch: Welcome (skippable) → Settings → dyslexia preset or theme chip + reduce motion ≈ **40–60 s**. Pass. Nothing resets without consent (settings persist; verified by store round-trip). One landmine: **F-25** (print-layout white blast). One irritant: spell/glossary underlines count as visual noise — off-switches exist but live mid-list (N-11).
 
-**P3. Thesis writer (novelist stand-in) — `fx_long` cards**
-60 unsorted cards on the free board: drag is smooth; "By part" columns with counts read like a corkboard. Sorting 60 cards via dropdowns is tedious but drag-to-column works.
-- **F-19 (Minor):** no multi-select on cards; sorting 60 one-by-one.
-- Sending a card to outline under its section works and is quietly excellent (protect).
+**P3. ADHD junior — `fx_tonight`, 8:40 p.m.**
+Initiation: opening the app lands directly in the paper (session restore — protect). Next-step card says the concrete next thing. Good.
+- Time blindness: due date + word count visible; back-planner says steps across days — but tonight the useful number is words-left-vs-hours-left, which nothing computes (N-04). No countdown pressure anywhere (pass — timer is opt-in).
+- Working memory: fleeting thought → 4+ clicks to Brain dump and back (N-05).
+- Containment: everything needed is in-app; the only exits are user-chosen. Pass.
+- 11:58 p.m. export: works in 4 interactions, then **silence** (F-05) — she exports three times "to be sure." The worst possible moment for ambiguity.
 
-**P4. Short-piece writer — `fx_short`**
-New paper → 4 fields (title/type/format) → write → export: the tool tax is genuinely low; reflection template is 5 gentle steps, ignorable. Passes the minimal-ceremony test. Only F-05 mars the finish.
+**P4. AuDHD sophomore — conflicting needs.**
+Routine shape: default calm-light, fixed layout, identical ritual every session — the app is *made* of routine. Novelty shape: theme switch, board mode, timer are the whole novelty budget. **The design silently picked routine — correctly.** Name it and keep it; resist novelty features (see Do-not-do). Tension honestly handled by making stimulation opt-in (tints, timer). No finding beyond documentation.
 
-**P5. Nonfiction proposal author — `fx_prop`**
-Annotated TOC via outline works; Chicago export produces a title page + Bibliography (verified rendering earlier in dev).
-- **F-20 (Major):** no import of any kind. An author with an existing DOCX chapter retypes or pastes as plain text (paste loses italics into TipTap? bold/italic survive HTML paste; headings partially — unverified, manual list). The brief's "audit what survives" cannot even start; there is no importer.
-- **F-21 (Major):** no footnotes — Chicago without notes is a half-promise. The app should either support basic footnotes or say plainly in the format picker that Chicago here = bibliography style only.
+**P5. Dyslexic college student.**
+UI reading load: short lines, generous defaults — pass. Fonts/spacing/tints/TTS/personal dictionary: pass (protect). Citation help: forms remove ordering/punctuation *recall*, which is the real burden — but see I-01 (italics) and F-08 (no insert-at-cursor: hand-transcribing `(Author, 2019)` from a panel is exactly the fiddly copying this student flubs). Dictation: untested (manual list).
 
-**P6. Academic writer — `fx_diss` (200 refs, APA)**
-Switching MLA→APA after creation: possible via Assignment→Paper details (F-17 discoverability), reference list relabels correctly.
-- Performance with 200 sources: fine (verified boot + smoke; formatting is O(n) string work).
-- **F-08 (Major):** no in-text citation insertion; with 200 sources the writer alt-tabs to the panel, memorizes "Author 143," and types `(Author, 2019)` by hand — the single largest friction for this persona.
-- **F-22 (Minor):** sources panel has no search/filter at 200 items; find-by-scroll.
-- Honesty check: the app never claims to be a reference manager; the Citations panel copy is appropriately modest. Verdict: honest, but F-08 keeps it from being *useful* at dissertation scale.
+**P6. HS sophomore, 504 plan — `fx_hs5`.**
+Five-paragraph shape maps 1:1 to the argument template (thesis, 3 points w/ PEEL, conclusion — counterargument card can be deleted). Teacher rubric ingests into "Graded on:" items (verified with fixture text). Register: speaks *to* them, not down (protect). Friction: the PEEL sub-prompts use "Analysis"/"Link back" — words her rubric doesn't use; a Minor vocabulary seam (N-13) worth a hover-explainer she already has for academic terms elsewhere.
 
-**P7. The returning writer — `fx_long` after 3 weeks (fixture sets `createdAt` 21 days back)**
-Reopens directly to the paper (session restore — good), cursor at end (reasonable). Due date and word goal render as quiet facts, not guilt (no red, no streaks — protect).
-- **F-23 (Minor):** nothing says *where you were*: no "last edited" marker in-document, no recent-activity note. Orientation took ~2 min of re-reading; a subtle "you stopped here" highlight would cut it to seconds.
-- **F-24 (Polish):** Library shows relative "edited 3 weeks ago" (good) but no sort control; the stale paper sorts by recency anyway.
+**P7. Returning student — `fx_stale` (21 days, post-burnout).**
+Reopens straight into the paper (good), cursor at end (arbitrary). Due date now reads as a past date — planner's `overdueDays` exists in `planner.ts`; the rendered copy tone for overdue is unverified (**manual list — must not shame**).
+- **N-12 (Major):** Their own note — "STOPPED AT: rewrite the accountability section" — sits unseen in Brain dump. No "welcome back / here's where you were / one small step" moment; reorientation is unassisted re-reading (~minutes, at shutdown-recovery cost). The app already stores everything needed to greet them well.
 
 ---
 
-## 5-minute manual test list (things this session could not truly experience)
+## Part 3 — The instructor test
 
-1. **Typing feel** in `fx_long` with spellcheck + spotlight + ruler + print-layout all enabled — watch for input lag on a low-end Windows laptop.
-2. **Quit-loss window (F-07):** type a sentence, quit within ~0.7 s via Cmd/Alt+F4, reopen — is the sentence there? Repeat 5×.
-3. **Read-aloud audio** on real Windows/macOS voices: rate/pitch quality, and whether `onboundary` fires per-word for your installed voices (highlighting granularity varies by engine).
-4. **Save-error UX:** make the data dir read-only mid-session; observe the chip and whether any writing can be rescued (copy-out).
-5. **Paste fidelity from Word:** paste a DOCX chapter with italics/headings/footnotes into the editor; record what survives (informs F-20).
-6. **High-contrast + print-layout combo:** print-layout forces a white sheet — verify it doesn't ambush high-contrast/dark users (suspected contrast inversion; `global.css` `:root[data-print-layout='true'] .prose` hardcodes `#ffffff`). **Likely F-25 (Major, a11y) — verify.**
-7. **Export files open correctly in real Word** (headers, page numbers as fields, hanging indents) — automated checks only proved bytes render.
+Process followed end-to-end on `fx_apa_rubric` (decode → requirements → outline w/ thesis frame → insert outline → draft → clarity/spelling → citations → export APA).
+
+**Rubric grade of the app-guided artifact** (what the process produces, not the fixture prose):
+
+| Criterion | Grade | Notes |
+|---|---|---|
+| Thesis | A− | Frame + pin + on-thesis nudge produce arguable, visible theses |
+| Argument & organization | B+ | PEEL scaffold + transitions menu = sound paragraphs; counterargument is a first-class step (rare, valuable) |
+| Evidence & source integration | C+ | The app tracks sources but never touches the *integration* moment: no quote/paraphrase scaffold, no signal-phrase help, no link from a Point to a source. "Drops quotes in" is the predictable outcome |
+| Citations | C | Order/punctuation of elements: correct to spec in MLA and APA samples checked. **I-01 (Major):** zero italics — every book title, journal, container ships roman in panel *and* export (`citations.ts` note admits it; `export.ts` renders plain `TextRun`). Under APA/MLA rubrics this is a per-reference error. **I-02 (Minor):** APA sentence-case not enforced/coached; MLA "et al." correct; volume/issue punctuation verified for the branches read — full character-check of every branch belongs in selftest |
+| Mechanics | B+ | Gentle spelling + clarity flags are specific and actionable |
+
+**Academic integrity map** — where AI acts (`shared/ai.ts`, `AiHelper.tsx`, `Board.tsx`):
+- Brainstorm → idea *phrases* as cards; Outline → structure *prompts* ("what THEY should write"); Feedback → questions. No thesis generation, no prose generation, no rewrite function anywhere. Off by default; per-click consent; local key. **Verdict: legitimate scaffolding; the paper is defensible orally because every sentence is the student's.**
+- **I-03 (Minor):** AI-brainstormed cards are indistinguishable from the student's own cards afterward. For a student later asked "which ideas were yours?" — and for honest self-knowledge — label their provenance (a small ✦ suffices).
+- **I-05 (Polish):** No visible statement a student could show an instructor ("what this tool does/never does") — an exportable integrity note would protect exactly these students under AI policies.
+
+**Scaffolding fade — I-04 (Major):** There is none. Paper #30 gets the same prompt text, same PEEL sub-steps, same coach as paper #1. Independence-as-goal requires a path to *less*: a "lean template" option, dismissible prompt text, and (eventually) "start from blank" as an earned default. Today the app quietly assumes permanent need.
 
 ---
 
-## Findings index (all, with severity)
+## 5-minute manual test list (traceable in code, not experienceable here)
 
-| ID | Sev | One-line | Primary files |
-|----|-----|----------|---------------|
-| F-01 | Blocker | No find/replace in editor; no project search | `Editor.tsx` |
-| F-02 | Major | No shortcuts/menu/palette/cheat sheet — undiscoverable minimalism | `src/main/index.ts`, app-wide |
-| F-03 | Major | Deletes permanent (paper/card/source/req); no undo outside editor | `Library.tsx`, `Board.tsx`, `useStore.ts` |
-| F-04 | Major | No per-paper snapshots/history | `services/backup.ts` (absence) |
-| F-05 | Major | Export success silent; no reveal/open | `Toolbar.tsx` |
-| F-06 | Major | Save "error" state has no retry/explanation | `useStore.ts`, `Toolbar.tsx` |
-| F-07 | Major | Quit-time flush not guaranteed (async beforeunload) | `App.tsx`, `src/main/index.ts` |
-| F-08 | Major | No in-text citation insertion | `CitationsPanel.tsx` |
-| F-09 | Major | Read-aloud: no pause; word-resume mouse-only | `ReadAloudOverlay.tsx` |
-| F-10 | Major | 8 native alert/confirm dialogs | grep sites |
-| F-11 | Minor | Library lacks search/sort | `Library.tsx` |
-| F-12 | Minor | Focus mode: no shortcut, Esc doesn't exit | `Toolbar.tsx` |
-| F-13 | Polish | Tools tab creep (7 tabs; Clarity/Spelling overlap) | `ToolsPanel.tsx` |
+1. **Quit-race (F-07):** type, Alt+F4 within ~0.7 s, reopen ×5 — any loss?
+2. **Overdue tone (N-12/planner):** set due date to yesterday — read every string it renders. Must be factual, never red, never "overdue!".
+3. **Print-layout × dark/high-contrast (F-25):** flip it in both — is it a white flash?
+4. **OS dictation** into the editor (Win+H / macOS) — punctuation, undo behavior.
+5. **Screen-reader pass** (NVDA): tablist, save chip announcements, spelling popover focus, read-aloud overlay.
+6. **Word/Docs opens the export:** italics absence (I-01), page-number fields, hanging indents.
+7. **Real voices:** read-aloud pause absence in practice; `onboundary` granularity per engine.
+
+## Questions only real users can answer (+ participatory plan)
+
+Automated review cannot know: whether the *decoder's explanations* match the ambiguity students actually feel; whether spotlight/tints help or stigmatize; whether the coach's tone lands as kind or as noise under RSD; whether "Graded on:" items reduce or add anxiety; what the perfectionism loop needs beyond a drafting mode; whether the board is a relief or a second task.
+
+**Plan (lightweight, 6–10 participants):** recruit via campus disability services + neurodivergent student orgs (compensated, remote, own laptops): 3 autistic college students (≥1 with a vague-prompt assignment in hand), 2 ADHD, 1 AuDHD, 1 dyslexic, 1 HS student with a 504. Tasks: (a) bring your real current assignment, get from prompt → thesis; (b) `fx_dump` → an outline you'd defend; (c) reopen `fx_stale` and resume; (d) export and check the citation page against your syllabus style. Observe: time-to-first-word, loop behaviors, settings hunting, points of shutdown; end with "what would you remove?" Two rounds: before and after the backlog's wave 1.
+
+## Findings index
+
+| ID | Sev | One-line | Files |
+|----|-----|----------|-------|
+| N-01 | Major | Vague prompt dead-ends; no unstated-expectations bridge | `assignment.ts`, `AssignmentPanel.tsx` |
+| N-02 | Major | No drafting mode; marks-on-by-default feeds perfectionism | `types.ts` defaults, `tiptapAddons.ts` |
+| N-03 | Minor | Sources unattachable to outline points | `OutlinePanel.tsx`, `CitationsPanel.tsx` |
+| N-04 | Minor | Words-left never meets days-left | `planner.ts`, `Editor.tsx` footer |
+| N-05 | Minor | No quick-capture to Brain dump from editor | `BrainDumpPanel.tsx` |
+| N-10 | Polish | Unit jargon in settings readouts | `SettingsPanel.tsx` |
+| N-11 | Minor | Settings = one long list | `SettingsPanel.tsx` |
+| N-12 | Major | No re-entry "where you were / next small step" | `App.tsx`, `Editor.tsx` |
+| N-13 | Minor | PEEL vocab unexplained inline | `outline-templates.ts` |
+| F-01 | Blocker | No find/replace anywhere | `Editor.tsx` |
+| F-03 | Major | Deletes permanent outside editor | `Board.tsx`, `useStore.ts` |
+| F-04 | Major | No snapshots/version history | `backup.ts` (absence) |
+| F-05 | Major | Export success silent | `Toolbar.tsx` |
+| F-06 | Major | Save-error: no retry/rescue | `useStore.ts`, `Toolbar.tsx` |
+| F-07 | Major | Quit-time flush race | `App.tsx:33`, `src/main/index.ts` |
+| F-09 | Major | Read-aloud: no pause; mouse-only resume | `ReadAloudOverlay.tsx` |
+| F-10 | Major | 8 native alert/confirm modals | grep sites |
 | F-14 | Minor | Spell popover doesn't take focus | `SpellPopover.tsx` |
-| F-15 | Minor | Free-board x/y arrangement pointer-only (documented tradeoff) | `Board.tsx` |
-| F-16 | Minor | Stock Electron menu; no Cmd+, etc. | `src/main/index.ts` |
 | F-17 | Minor | Format/heading buried in Assignment tab | `AssignmentPanel.tsx` |
-| F-18 | Minor | Requirements checklist not exportable (checker packet) | `services/export.ts` |
-| F-19 | Minor | No card multi-select (60-card sort is 60 drags) | `Board.tsx` |
-| F-20 | Major | No DOCX/Markdown import | absence |
-| F-21 | Major | No footnotes; Chicago half-served | `export.ts`, editor |
-| F-22 | Minor | Sources panel: no search at 200 items | `CitationsPanel.tsx` |
-| F-23 | Minor | No "you stopped here" reorientation cue | `Editor.tsx` |
-| F-24 | Polish | Library: no sort control | `Library.tsx` |
-| F-25 | Major? | Print-layout hardcodes white sheet — verify vs dark/high-contrast | `global.css` |
-
-*Evidence basis: source audit of every file named; fixture boot + smoke run (`WP_SMOKE_OK` on fixture data); nspell/scan micro-benchmarks under Electron ABI; export PDFs rendered and inspected earlier in this branch's history (MLA/APA verified page-by-page).*
+| F-25 | Major* | Print-layout white sheet vs dark themes (*verify) | `global.css` |
+| I-01 | Major | No italics in citations, panel or export | `citations.ts`, `export.ts` |
+| I-02 | Minor | APA sentence-case uncoached; full char-audit → selftest | `citations.ts` |
+| I-03 | Minor | AI card provenance unlabeled | `Board.tsx` |
+| I-04 | Major | No scaffolding fade | templates/app-wide |
+| I-05 | Polish | No exportable integrity statement | — |
