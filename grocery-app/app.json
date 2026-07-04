@@ -1,0 +1,21 @@
+{
+  "expo": {
+    "name": "Grocery List",
+    "slug": "grocery-list",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.example.grocerylist"
+    },
+    "android": {
+      "package": "com.example.grocerylist",
+      "edgeToEdgeEnabled": true
+    },
+    "web": {
+      "bundler": "metro"
+    }
+  }
+}
