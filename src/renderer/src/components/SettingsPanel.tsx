@@ -147,6 +147,8 @@ export function SettingsPanel(): JSX.Element {
         </div>
       </fieldset>
 
+      <details className="settings-group" data-testid="group-text">
+        <summary>Text size &amp; spacing</summary>
       <Slider
         label="Text size"
         value={settings.fontScale}
@@ -192,6 +194,7 @@ export function SettingsPanel(): JSX.Element {
         format={(v) => `${v} chars`}
         onChange={(v) => update({ maxLineWidth: v })}
       />
+      </details>
 
       <fieldset className="setting">
         <legend>Colour overlay</legend>
@@ -210,6 +213,8 @@ export function SettingsPanel(): JSX.Element {
         </div>
       </fieldset>
 
+      <details className="settings-group" data-testid="group-aids">
+        <summary>Reading aids</summary>
       <label className="toggle">
         <input
           type="checkbox"
@@ -249,7 +254,10 @@ export function SettingsPanel(): JSX.Element {
         />
         <span>Underline academic terms (hover to see a meaning)</span>
       </label>
+      </details>
 
+      <details className="settings-group" data-testid="group-spelling">
+        <summary>Spelling help</summary>
       <label className="toggle">
         <input
           type="checkbox"
@@ -286,6 +294,7 @@ export function SettingsPanel(): JSX.Element {
           ))}
         </div>
       )}
+      </details>
 
       <label className="toggle">
         <input
