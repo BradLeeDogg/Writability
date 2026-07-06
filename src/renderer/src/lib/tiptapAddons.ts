@@ -195,3 +195,65 @@ export const Spellcheck = Extension.create({
     ]
   }
 })
+
+// --- Find: highlight matches of the find-bar query --------------------------
+export interface FindState {
+  query: string
+  active: number
+}
+export const findKey = new PluginKey<FindState>('find')
+
+/** All case-insensitive matches of `query` in the doc's text nodes. */
+export function findMatches(doc: PMNode, query: string): { from: number; to: number }[] {
+  const out: { from: number; to: number }[] = []
+  const q = query.toLowerCase()
+  if (!q) return out
+  doc.descendants((node, pos) => {
+    if (!node.isText || !node.text) return
+    const text = node.text.toLowerCase()
+    let i = text.indexOf(q)
+    while (i !== -1 && out.length < 500) {
+      out.push({ from: pos + i, to: pos + i + q.length })
+      i = text.indexOf(q, i + q.length)
+    }
+  })
+  return out
+}
+
+let findCache: { doc: PMNode | null; key: string; set: DecorationSet } = {
+  doc: null,
+  key: '',
+  set: DecorationSet.empty
+}
+
+export const Find = Extension.create({
+  name: 'find',
+  addProseMirrorPlugins() {
+    return [
+      new Plugin<FindState>({
+        key: findKey,
+        state: {
+          init: () => ({ query: '', active: 0 }),
+          apply(tr, value) {
+            const meta = tr.getMeta(findKey) as Partial<FindState> | undefined
+            return meta ? { ...value, ...meta } : value
+          }
+        },
+        props: {
+          decorations(state) {
+            const st = findKey.getState(state)
+            if (!st || !st.query) return DecorationSet.empty
+            const key = `${st.query}:${st.active}`
+            if (findCache.doc === state.doc && findCache.key === key) return findCache.set
+            const decos = findMatches(state.doc, st.query).map((m, i) =>
+              Decoration.inline(m.from, m.to, { class: 'pm-find' + (i === st.active ? ' active' : '') })
+            )
+            const set = DecorationSet.create(state.doc, decos)
+            findCache = { doc: state.doc, key, set }
+            return set
+          }
+        }
+      })
+    ]
+  }
+})

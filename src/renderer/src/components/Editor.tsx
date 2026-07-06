@@ -1,4 +1,4 @@
-import { useEffect, useReducer, useRef, useState } from 'react'
+import { useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import { EditorContent, useEditor } from '@tiptap/react'
 import type { Editor as TiptapEditor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
@@ -8,7 +8,7 @@ import { useStore } from '../store/useStore'
 import { ThesisPin } from './ThesisPin'
 import { SpellPopover } from './SpellPopover'
 import type { SpellTarget } from './SpellPopover'
-import { Spotlight, spotlightKey, Glossary, glossaryKey, Spellcheck, spellcheckKey } from '../lib/tiptapAddons'
+import { Spotlight, spotlightKey, Glossary, glossaryKey, Spellcheck, spellcheckKey, Find, findKey, findMatches } from '../lib/tiptapAddons'
 import { ensureSpell, setCustomWords } from '../lib/spell'
 import { outlineToDocContent } from '@shared/scaffold'
 import { TRANSITIONS } from '@shared/transitions'
@@ -36,7 +36,8 @@ export function Editor(): JSX.Element {
       CharacterCount,
       Spotlight,
       Glossary,
-      Spellcheck
+      Spellcheck,
+      Find
     ],
     content: current.content.doc as never,
     autofocus: 'end',
@@ -148,6 +149,72 @@ export function Editor(): JSX.Element {
     setRulerTop(e.clientY - rect.top + el.scrollTop)
   }
 
+  // Find & replace: Ctrl/Cmd+F opens a small inline bar; Esc closes it.
+  const [findOpen, setFindOpen] = useState(false)
+  const [findQuery, setFindQuery] = useState('')
+  const [findActive, setFindActive] = useState(0)
+  const [replaceWith, setReplaceWith] = useState('')
+  const findInputRef = useRef<HTMLInputElement>(null)
+
+  const matches = useMemo(() => {
+    if (!editor || !findQuery) return []
+    return findMatches(editor.state.doc, findQuery)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editor, findQuery, editor?.state.doc])
+
+  const syncFind = (query: string, active: number): void => {
+    if (!editor) return
+    editor.view.dispatch(editor.state.tr.setMeta(findKey, { query, active }))
+  }
+
+  const gotoMatch = (index: number): void => {
+    if (!editor || matches.length === 0) return
+    const i = ((index % matches.length) + matches.length) % matches.length
+    setFindActive(i)
+    syncFind(findQuery, i)
+    const dom = editor.view.domAtPos(matches[i].from).node
+    const el = dom.nodeType === 3 ? dom.parentElement : (dom as HTMLElement)
+    el?.scrollIntoView({ block: 'center' })
+  }
+
+  const openFind = (): void => {
+    setFindOpen(true)
+    setTimeout(() => findInputRef.current?.focus(), 0)
+  }
+
+  const closeFind = (): void => {
+    setFindOpen(false)
+    setFindQuery('')
+    setFindActive(0)
+    syncFind('', 0)
+    editor?.commands.focus()
+  }
+
+  const replaceCurrent = (): void => {
+    if (!editor || matches.length === 0) return
+    const m = matches[Math.min(findActive, matches.length - 1)]
+    editor.chain().focus().insertContentAt({ from: m.from, to: m.to }, replaceWith).run()
+  }
+
+  const replaceAll = (): void => {
+    if (!editor || matches.length === 0) return
+    const chain = editor.chain().focus()
+    for (const m of [...matches].reverse()) chain.insertContentAt({ from: m.from, to: m.to }, replaceWith)
+    chain.run()
+  }
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent): void => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f') {
+        e.preventDefault()
+        openFind()
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   const words = editor?.storage.characterCount.words() ?? 0
   const goal = current.meta.wordGoal
   const { pages, wordsToNextPage } = pageStats(words)
@@ -163,6 +230,56 @@ export function Editor(): JSX.Element {
     <section className="editor-wrap" data-testid="editor" aria-label="Writing area">
       <ThesisPin />
       <FormatBar editor={editor} onInsertOutline={insertOutline} />
+      {findOpen && (
+        <div className="find-bar" data-testid="find-bar" role="search" aria-label="Find in paper">
+          <input
+            ref={findInputRef}
+            data-testid="find-input"
+            value={findQuery}
+            placeholder="Find in this paper…"
+            aria-label="Find text"
+            onChange={(e) => {
+              setFindQuery(e.target.value)
+              setFindActive(0)
+              syncFind(e.target.value, 0)
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') gotoMatch(e.shiftKey ? findActive - 1 : findActive + (findQuery ? 1 : 0))
+              if (e.key === 'Escape') closeFind()
+            }}
+          />
+          <span className="find-count" data-testid="find-count" aria-live="polite">
+            {findQuery ? (matches.length ? `${Math.min(findActive + 1, matches.length)} of ${matches.length}` : 'No matches') : ''}
+          </span>
+          <button className="icon" aria-label="Previous match" onClick={() => gotoMatch(findActive - 1)}>
+            ↑
+          </button>
+          <button className="icon" aria-label="Next match" data-testid="find-next" onClick={() => gotoMatch(findActive + 1)}>
+            ↓
+          </button>
+          <details className="find-replace">
+            <summary>Replace…</summary>
+            <div className="find-replace-row">
+              <input
+                data-testid="replace-input"
+                value={replaceWith}
+                placeholder="Replace with…"
+                aria-label="Replacement text"
+                onChange={(e) => setReplaceWith(e.target.value)}
+              />
+              <button className="ghost" data-testid="replace-one" onClick={replaceCurrent}>
+                Replace
+              </button>
+              <button className="ghost" data-testid="replace-all" onClick={replaceAll}>
+                All
+              </button>
+            </div>
+          </details>
+          <button className="icon" aria-label="Close find" data-testid="find-close" onClick={closeFind}>
+            ×
+          </button>
+        </div>
+      )}
       <div
         className="editor-scroll"
         ref={scrollRef}

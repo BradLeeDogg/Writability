@@ -1,4 +1,4 @@
-import { app, BrowserWindow, shell } from 'electron'
+import { app, BrowserWindow, ipcMain, shell } from 'electron'
 import { join } from 'path'
 import { tmpdir } from 'os'
 import { registerIpc } from './ipc'
@@ -42,6 +42,24 @@ function createWindow(): BrowserWindow {
   win.webContents.setWindowOpenHandler(({ url }) => {
     if (url.startsWith('http')) shell.openExternal(url)
     return { action: 'deny' }
+  })
+
+  // Quit-safe saving: before the window closes, ask the renderer to flush any
+  // debounced save and wait (briefly) for its ack so the last keystrokes are
+  // never lost to the 700ms autosave window.
+  let flushed = false
+  win.on('close', (e) => {
+    if (flushed || win.webContents.isDestroyed()) return
+    e.preventDefault()
+    const finish = (): void => {
+      if (flushed) return
+      flushed = true
+      ipcMain.removeListener('app:flushed', finish)
+      if (!win.isDestroyed()) win.destroy()
+    }
+    ipcMain.once('app:flushed', finish)
+    win.webContents.send('app:flush')
+    setTimeout(finish, 1000)
   })
 
   const rendererUrl = process.env['ELECTRON_RENDERER_URL']

@@ -31,6 +31,8 @@ export function SettingsPanel(): JSX.Element {
   const settings = useStore((s) => s.settings)
   const update = useStore((s) => s.updateSettings)
   const removeCustomWord = useStore((s) => s.removeCustomWord)
+  const showToast = useStore((s) => s.showToast)
+  const askConfirm = useStore((s) => s.askConfirm)
   const createBackup = useStore((s) => s.createBackup)
   const restoreBackup = useStore((s) => s.restoreBackup)
   const replayWelcome = useStore((s) => s.replayWelcome)
@@ -54,23 +56,24 @@ export function SettingsPanel(): JSX.Element {
   const onBackup = async (): Promise<void> => {
     const res = await createBackup()
     if (res.ok) {
-      alert(`Saved a backup of ${res.count} paper${res.count === 1 ? '' : 's'}.`)
+      showToast(`Saved a backup of ${res.count} paper${res.count === 1 ? '' : 's'}.`)
     } else if (!res.canceled) {
-      alert('Could not save the backup: ' + (res.error ?? 'unknown error'))
+      showToast('Could not save the backup: ' + (res.error ?? 'unknown error'))
     }
   }
 
   const onRestore = async (): Promise<void> => {
-    const ok = confirm(
-      'Restore from a backup?\n\nThis brings back the papers saved in the file. ' +
-        'Any paper you already have with the same id will be replaced by the saved copy.'
-    )
+    const ok = await askConfirm({
+      title: 'Restore from a backup?',
+      body: 'This brings back the papers saved in the file. Any paper you already have with the same id will be replaced by the saved copy.',
+      confirmLabel: 'Restore'
+    })
     if (!ok) return
     const res = await restoreBackup()
     if (res.ok) {
-      alert(`Brought back ${res.imported} paper${res.imported === 1 ? '' : 's'}.`)
+      showToast(`Brought back ${res.imported} paper${res.imported === 1 ? '' : 's'}.`)
     } else if (!res.canceled) {
-      alert('Could not restore: ' + (res.error ?? 'unknown error'))
+      showToast('Could not restore: ' + (res.error ?? 'unknown error'))
     }
   }
 

@@ -288,8 +288,32 @@ const PROBE = `(async () => {
     throw new Error('drag-to-sort did not move the card into the target column');
   }
 
+  // Deleting a card shows an Undo toast that restores it.
+  {
+    const before = document.querySelectorAll('[data-testid="board-card"]').length;
+    const del = document.querySelector('[data-testid="board-card"] [aria-label="Delete card"]');
+    del.click();
+    await waitFor('[data-testid="toast-undo"]', 'undo toast for deleted card');
+    q('[data-testid="toast-undo"]').click();
+    await sleep(120);
+    const after = document.querySelectorAll('[data-testid="board-card"]').length;
+    if (after !== before) throw new Error('undo did not restore the card (' + before + ' -> ' + after + ')');
+  }
+
   (await waitFor('[data-testid="board-toggle"]', 'board toggle back')).click();
   await waitFor('[data-testid="editor"]', 'back to the editor');
+
+  // Find & replace: Ctrl+F opens the bar, finds matches, Esc closes.
+  window.dispatchEvent(new KeyboardEvent('keydown', { key: 'f', ctrlKey: true, bubbles: true }));
+  const findInput = await waitFor('[data-testid="find-input"]', 'find bar input');
+  setValue(findInput, 'because');
+  await sleep(120);
+  const count = q('[data-testid="find-count"]').textContent;
+  if (!/of/.test(count)) throw new Error('find reported no matches: ' + count);
+  if (!document.querySelector('.pm-find')) throw new Error('find matches not highlighted');
+  (await waitFor('[data-testid="find-close"]', 'find close')).click();
+  await sleep(80);
+  if (q('[data-testid="find-bar"]')) throw new Error('find bar did not close');
 
   // Immersive "Read to me": opens a reader that highlights each word as it reads.
   (await waitFor('[data-testid="read-aloud"]', 'read-aloud button')).click();

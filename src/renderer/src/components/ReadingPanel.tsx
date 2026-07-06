@@ -11,6 +11,7 @@ export function ReadingPanel(): JSX.Element {
   const ttsVoice = useStore((s) => s.settings.ttsVoice)
   const [text, setText] = useState('')
   const [speaking, setSpeaking] = useState(false)
+  const showToast = useStore((st) => st.showToast)
 
   const summary = useMemo(() => summarizeSource(text), [text])
   const hasText = text.trim().length > 0
@@ -28,7 +29,7 @@ export function ReadingPanel(): JSX.Element {
       onEnd: () => setSpeaking(false)
     })
     setSpeaking(ok)
-    if (!ok) alert('Read-aloud is not available on this device.')
+    if (!ok) showToast('Read-aloud is not available on this device.')
   }
 
   return (

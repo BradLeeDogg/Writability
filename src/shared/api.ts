@@ -93,6 +93,12 @@ export interface WritabilityApi {
   openPaper(id: string): Promise<Paper | null>
   savePaper(input: SavePaperInput): Promise<SavePaperResult>
   deletePaper(id: string): Promise<{ ok: boolean }>
+  /** Papers in the trash (recently deleted), newest first. */
+  listTrash(): Promise<PaperSummary[]>
+  /** Bring a trashed paper back into the library. */
+  restorePaper(id: string): Promise<{ ok: boolean }>
+  /** Emergency plain-text save of the current document (save dialog). */
+  rescueText(title: string, text: string): Promise<{ ok: boolean; canceled?: boolean; path?: string }>
 
   // Settings --------------------------------------------------------------
   getSettings(): Promise<AppSettings>
@@ -111,6 +117,18 @@ export interface WritabilityApi {
   /** Run an opt-in AI task with the student's own key. Offline-safe: returns a
    *  friendly error if no key is set. Never called unless the student clicks. */
   runAi(input: AiRunInput): Promise<AiRunResult>
+
+  // Files -----------------------------------------------------------------
+  /** Reveal an exported file in the OS file manager. */
+  revealFile(path: string): Promise<void>
+  /** Open an exported file with its default app. */
+  openFile(path: string): Promise<void>
+
+  // Lifecycle ---------------------------------------------------------------
+  /** Main asks the renderer to flush unsaved work before the window closes. */
+  onFlushRequest(cb: () => void): void
+  /** Renderer tells main the flush finished and the window may close. */
+  flushDone(): void
 
   // Misc ------------------------------------------------------------------
   getAppInfo(): Promise<AppInfo>

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useStore } from '../store/useStore'
 import { formatWhen } from '../lib/format'
 import { ESSAY_TYPE_LABELS } from '@shared/types'
@@ -12,6 +12,14 @@ export function Library(): JSX.Element {
   const createPaper = useStore((s) => s.createPaper)
   const openPaper = useStore((s) => s.openPaper)
   const deletePaper = useStore((s) => s.deletePaper)
+  const askConfirm = useStore((s) => s.askConfirm)
+  const trash = useStore((s) => s.trash)
+  const refreshTrash = useStore((s) => s.refreshTrash)
+  const restoreFromTrash = useStore((s) => s.restoreFromTrash)
+
+  useEffect(() => {
+    void refreshTrash()
+  }, [refreshTrash])
 
   const [showNew, setShowNew] = useState(false)
   const [title, setTitle] = useState('')
@@ -126,7 +134,18 @@ export function Library(): JSX.Element {
                   aria-label={'Delete ' + p.title}
                   title={'Delete ' + p.title}
                   onClick={() => {
-                    if (confirm(`Delete "${p.title}"? This cannot be undone.`)) void deletePaper(p.id)
+                    void (async () => {
+                      const ok = await askConfirm({
+                        title: 'Delete this paper?',
+                        body: `"${p.title}" will move to Recently deleted, where you can bring it back for 30 days.`,
+                        confirmLabel: 'Delete',
+                        danger: true
+                      })
+                      if (ok) {
+                        await deletePaper(p.id)
+                        await refreshTrash()
+                      }
+                    })()
                   }}
                 >
                   🗑
@@ -136,6 +155,27 @@ export function Library(): JSX.Element {
           </ul>
         )}
       </section>
+
+      {trash.length > 0 && (
+        <details className="trash-list" data-testid="trash-list">
+          <summary>Recently deleted ({trash.length})</summary>
+          <p className="muted small">Deleted papers stay here for 30 days.</p>
+          <ul>
+            {trash.map((p) => (
+              <li key={p.id} className="paper-row">
+                <span className="paper-title muted">{p.title}</span>
+                <button
+                  className="ghost"
+                  data-testid={'restore-' + p.id}
+                  onClick={() => void restoreFromTrash(p.id)}
+                >
+                  Bring back
+                </button>
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
     </div>
   )
 }

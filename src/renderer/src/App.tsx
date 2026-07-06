@@ -8,6 +8,7 @@ import { ToolsPanel } from './components/ToolsPanel'
 import { Board } from './components/Board'
 import { ReadAloudOverlay } from './components/ReadAloudOverlay'
 import { Welcome } from './components/Welcome'
+import { Notices } from './components/Notices'
 
 export default function App(): JSX.Element {
   const ready = useStore((s) => s.ready)
@@ -25,8 +26,12 @@ export default function App(): JSX.Element {
     void init()
   }, [init])
 
-  // Best-effort flush of pending edits when the window is closing.
+  // Quit-safe saving: main intercepts the window close and waits for this
+  // flush to finish (see src/main/index.ts). beforeunload stays as a backup.
   useEffect(() => {
+    window.api.onFlushRequest(() => {
+      void save().finally(() => window.api.flushDone())
+    })
     const flush = (): void => {
       void save()
     }
@@ -51,6 +56,7 @@ export default function App(): JSX.Element {
     return (
       <div className="app" data-testid="app">
         {showWelcome && <Welcome />}
+      <Notices />
         <Library />
       </div>
     )
@@ -59,6 +65,7 @@ export default function App(): JSX.Element {
   return (
     <div className="app" data-testid="app">
       {showWelcome && <Welcome />}
+      <Notices />
       <ReadAloudOverlay />
       <Toolbar />
       {boardOpen ? (

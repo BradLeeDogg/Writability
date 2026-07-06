@@ -2,7 +2,7 @@ import assert from 'node:assert'
 import { readFileSync, rmSync } from 'fs'
 import { app } from 'electron'
 import { writeJsonAtomic, readJson } from './services/atomic'
-import { createPaper, deletePaper, listPapers, openPaper, savePaper } from './services/papers'
+import { createPaper, deletePaper, listPapers, openPaper, savePaper, listTrash, restorePaper } from './services/papers'
 import { encryptionAvailable, getSettings, saveSettings } from './services/settings'
 import { renderExport } from './services/export'
 import { applyBundle, buildBundle } from './services/backup'
@@ -574,6 +574,16 @@ export async function runSelftest(): Promise<void> {
     deletePaper(paper.meta.id)
     assert.equal(openPaper(paper.meta.id), null, 'paper deleted')
     pass('delete paper')
+
+    // --- trash: delete moves to trash, restore brings it back -----------
+    const trPaper = createPaper({ title: 'Trash me', essayType: 'argument' })
+    deletePaper(trPaper.meta.id)
+    assert.ok(!listPapers().some((p) => p.id === trPaper.meta.id), 'deleted paper leaves the library')
+    assert.ok(listTrash().some((p) => p.id === trPaper.meta.id), 'deleted paper appears in the trash')
+    assert.equal(restorePaper(trPaper.meta.id).ok, true, 'restore succeeds')
+    assert.ok(listPapers().some((p) => p.id === trPaper.meta.id), 'restored paper is back in the library')
+    assert.ok(!listTrash().some((p) => p.id === trPaper.meta.id), 'restored paper leaves the trash')
+    pass('trash round-trip')
 
     console.log(`SELFTEST_OK (${checks.length} checks: ${checks.join(', ')})`)
     cleanup()

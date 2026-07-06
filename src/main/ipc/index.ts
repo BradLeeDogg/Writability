@@ -1,10 +1,12 @@
-import { app, ipcMain } from 'electron'
+import { app, dialog, ipcMain, shell } from 'electron'
 import * as papers from '../services/papers'
 import * as settings from '../services/settings'
 import { exportPaper } from '../services/export'
 import { createBackup, restoreBackup } from '../services/backup'
 import { runAiTask } from '../services/ai'
 import { dataDir } from '../services/paths'
+import { writeFile } from 'fs/promises'
+import { join } from 'path'
 import type { AiRunInput, CreatePaperInput, ExportInput, SavePaperInput } from '@shared/api'
 import type { AppSettings } from '@shared/types'
 
@@ -17,6 +19,20 @@ export function registerIpc(): void {
   ipcMain.handle('papers:open', (_e, id: string) => papers.openPaper(id))
   ipcMain.handle('papers:save', (_e, input: SavePaperInput) => papers.savePaper(input))
   ipcMain.handle('papers:delete', (_e, id: string) => papers.deletePaper(id))
+  ipcMain.handle('papers:list-trash', () => papers.listTrash())
+  ipcMain.handle('papers:restore', (_e, id: string) => papers.restorePaper(id))
+  // Emergency plain-text save when normal saving is failing.
+  ipcMain.handle('papers:rescue', async (_e, title: string, text: string) => {
+    const safe = (title || 'paper').replace(/[^\w\- ]+/g, '').trim() || 'paper'
+    const { canceled, filePath } = await dialog.showSaveDialog({
+      title: 'Save a copy of your writing',
+      defaultPath: join(app.getPath('documents'), `${safe} (rescued copy).txt`),
+      filters: [{ name: 'Plain text', extensions: ['txt'] }]
+    })
+    if (canceled || !filePath) return { ok: false, canceled: true }
+    await writeFile(filePath, text, 'utf8')
+    return { ok: true, path: filePath }
+  })
 
   // Settings --------------------------------------------------------------
   ipcMain.handle('settings:get', () => settings.getSettings())
@@ -31,6 +47,12 @@ export function registerIpc(): void {
 
   // AI (opt-in) -----------------------------------------------------------
   ipcMain.handle('ai:run', (_e, input: AiRunInput) => runAiTask(input))
+
+  // Files -------------------------------------------------------------------
+  ipcMain.handle('file:reveal', (_e, path: string) => shell.showItemInFolder(path))
+  ipcMain.handle('file:open', async (_e, path: string) => {
+    await shell.openPath(path)
+  })
 
   // Misc ------------------------------------------------------------------
   ipcMain.handle('app:info', () => ({

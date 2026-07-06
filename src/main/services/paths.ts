@@ -17,6 +17,11 @@ export function papersDir(): string {
   return join(dataDir(), 'Papers')
 }
 
+/** Recently-deleted papers live here until restored or pruned. */
+export function trashDir(): string {
+  return join(dataDir(), 'Trash')
+}
+
 export function paperDir(id: string): string {
   return join(papersDir(), id)
 }

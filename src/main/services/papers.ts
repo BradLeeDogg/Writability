@@ -1,7 +1,8 @@
-import { existsSync, readdirSync, rmSync } from 'fs'
+import { existsSync, readdirSync, renameSync, rmSync } from 'fs'
+import { join } from 'path'
 import { ensureDir, readJson, writeJsonAtomic } from './atomic'
 import { openPaperDb, readContent, writeContent } from './db'
-import { paperDir, paperSidecarPath, papersDir } from './paths'
+import { paperDir, paperSidecarPath, papersDir, trashDir } from './paths'
 import { emptyDoc } from '@shared/doc'
 import { uid } from '@shared/ids'
 import { makeOutline } from '@shared/outline-templates'
@@ -107,8 +108,58 @@ export function importPaper(paper: Paper): void {
   writeJsonAtomic(paperSidecarPath(paper.meta.id), { meta: paper.meta } satisfies Sidecar)
 }
 
+// Deleting moves the paper to the trash so it is always recoverable; trashed
+// papers older than 30 days are pruned on the next delete.
+const TRASH_KEEP_MS = 30 * 24 * 60 * 60 * 1000
+
 export function deletePaper(id: string): { ok: boolean } {
   const dir = paperDir(id)
-  if (existsSync(dir)) rmSync(dir, { recursive: true, force: true })
+  if (existsSync(dir)) {
+    ensureDir(trashDir())
+    const dest = join(trashDir(), id)
+    if (existsSync(dest)) rmSync(dest, { recursive: true, force: true })
+    renameSync(dir, dest)
+  }
+  pruneTrash()
   return { ok: true }
+}
+
+function trashedMeta(id: string): PaperMeta | null {
+  const sidecar = join(trashDir(), id, 'paper.json')
+  const data = readJson<Sidecar | null>(sidecar, null)
+  return data?.meta ?? null
+}
+
+export function listTrash(): PaperSummary[] {
+  const dir = trashDir()
+  if (!existsSync(dir)) return []
+  const out: PaperSummary[] = []
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue
+    const meta = trashedMeta(entry.name)
+    if (meta) out.push({ id: meta.id, title: meta.title, essayType: meta.essayType, updatedAt: meta.updatedAt, dir: join(trashDir(), meta.id) })
+  }
+  return out.sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : -1))
+}
+
+export function restorePaper(id: string): { ok: boolean } {
+  const src = join(trashDir(), id)
+  if (!existsSync(src)) return { ok: false }
+  const dest = paperDir(id)
+  if (existsSync(dest)) return { ok: false }
+  ensureDir(papersDir())
+  renameSync(src, dest)
+  return { ok: true }
+}
+
+function pruneTrash(): void {
+  const dir = trashDir()
+  if (!existsSync(dir)) return
+  const cutoff = Date.now() - TRASH_KEEP_MS
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue
+    const meta = trashedMeta(entry.name)
+    const when = meta ? Date.parse(meta.updatedAt) : 0
+    if (when < cutoff) rmSync(join(dir, entry.name), { recursive: true, force: true })
+  }
 }
