@@ -46,7 +46,8 @@ export function createPaper(input: CreatePaperInput): Paper {
     updatedAt: now,
     format,
     heading: {},
-    pageNumbers: format !== 'none'
+    pageNumbers: format !== 'none',
+    stage: 'draft'
   }
   ensureDir(paperDir(id))
   const content: Paper['content'] = {

@@ -10,12 +10,12 @@ import { runAiTask } from './services/ai'
 import { dataDir, settingsPath } from './services/paths'
 import { buildPrompt, isValidModel, splitIntoItems } from '@shared/ai'
 import { analyzeClarity, suggestSentenceSplit } from '@shared/clarity'
-import { decodeAssignment } from '@shared/assignment'
+import { decodeAssignment, needsExpectationsBridge, UNSTATED_EXPECTATIONS } from '@shared/assignment'
 import { outlineToDocContent } from '@shared/scaffold'
 import { TRANSITIONS } from '@shared/transitions'
 import { GLOSSARY, glossaryMap } from '@shared/glossary'
 import { summarizeSource } from '@shared/reading'
-import { formatCitation } from '@shared/citations'
+import { formatCitation, referenceSegments } from '@shared/citations'
 import { docToPlainText, splitSentences, sentenceIndexAt, splitWords, wordIndexAt, replaceWordInDoc } from '@shared/doc'
 import { estimatePages, pageStats, WORDS_PER_PAGE, formatSpec, lastNameOf, mlaHeadingLines } from '@shared/format'
 import { coachContext } from '@shared/coach'
@@ -109,6 +109,7 @@ export async function runSelftest(): Promise<void> {
 
     // --- paper create / save / reopen (SQLite + sidecar) ----------------
     const paper = createPaper({ title: 'Self-test paper', essayType: 'argument' })
+    assert.equal(paper.meta.stage, 'draft', 'new papers start in the draft stage')
     assert.ok(paper.meta.id.startsWith('paper-'))
     assert.ok(paper.content.outline.length >= 3)
     // The argument outline nests evidence/analysis under points.
@@ -246,6 +247,12 @@ export async function runSelftest(): Promise<void> {
       'Your essay needs to:\n- discuss two causes\n- include a counterargument\n- end with a conclusion'
     )
     assert.ok(bullets.requirements.some((r) => /discuss two causes/i.test(r)), 'plain bullets are captured')
+    // The vague-prompt bridge: command word found but nothing concrete.
+    const vague = decodeAssignment('Discuss the role of memory in Beloved.')
+    assert.ok(needsExpectationsBridge(vague), 'a vague prompt triggers the expectations bridge')
+    assert.ok(!needsExpectationsBridge(decoded), 'a detailed prompt does not trigger the bridge')
+    assert.ok(UNSTATED_EXPECTATIONS.length >= 4, 'bridge has concrete expectation items')
+    assert.ok(UNSTATED_EXPECTATIONS.some((x) => x.ask && x.question), 'bridge includes ask-your-teacher items')
     pass('assignment decoder')
 
     // --- page estimate for the word-count footer (pure) -----------------
@@ -352,6 +359,19 @@ export async function runSelftest(): Promise<void> {
       'chicago'
     )
     assert.ok(chicago.reference.includes('A Web Page'))
+    // Italic segments: titles/containers are marked for italic rendering.
+    const bookSegs = referenceSegments(
+      { id: 'b', type: 'book', authors: ['Smith, John'], title: 'A Serious Book', publisher: 'University Press', year: '2020' },
+      'mla'
+    )
+    assert.ok(bookSegs.some((x) => x.italic && x.text === 'A Serious Book'), 'book title segment is italic')
+    const journalSegs = referenceSegments(
+      { id: 'j', type: 'journal', authors: ['Lee, Ann'], title: 'On Memory', containerTitle: 'Journal of Studies', volume: '12', year: '2019' },
+      'apa'
+    )
+    assert.ok(journalSegs.some((x) => x.italic && x.text === 'Journal of Studies'), 'journal name segment is italic (APA)')
+    assert.ok(journalSegs.some((x) => x.italic && x.text === '12'), 'APA journal volume is italic')
+    assert.ok(!journalSegs.some((x) => x.italic && x.text.includes('On Memory')), 'article title stays roman')
     pass('citations (mla/apa/chicago)')
 
     // --- export ---------------------------------------------------------

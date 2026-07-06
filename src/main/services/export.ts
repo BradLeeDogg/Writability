@@ -13,7 +13,7 @@ import {
 } from 'docx'
 import { openPaper } from './papers'
 import { docToParagraphs, docToPlainText } from '@shared/doc'
-import { formatCitation } from '@shared/citations'
+import { formatCitation, referenceSegments } from '@shared/citations'
 import {
   citationStyleFor,
   formatSpec,
@@ -127,7 +127,9 @@ async function buildDocx(paper: Paper): Promise<Buffer> {
         new Paragraph({
           spacing: { line: DOUBLE, after: 0 },
           indent: { hanging: INDENT },
-          children: [new TextRun(formatCitation(s, style).reference)]
+          children: referenceSegments(s, style).map(
+            (seg) => new TextRun({ text: seg.text, italics: seg.italic })
+          )
         })
       )
     }
@@ -188,7 +190,12 @@ function renderHtml(paper: Paper): string {
     body +=
       `<h2>${escapeHtml(spec.referenceLabel)}</h2>` +
       paper.content.sources
-        .map((s) => `<p class="cite">${escapeHtml(formatCitation(s, style).reference)}</p>`)
+        .map(
+          (s) =>
+            `<p class="cite">${referenceSegments(s, style)
+              .map((seg) => (seg.italic ? `<i>${escapeHtml(seg.text)}</i>` : escapeHtml(seg.text)))
+              .join('')}</p>`
+        )
         .join('\n')
   }
 

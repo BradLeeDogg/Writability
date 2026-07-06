@@ -1812,3 +1812,91 @@ input[type='range'] {
   cursor: pointer;
   color: var(--text-muted);
 }
+
+/* Draft / Polish stage toggle */
+.stage-toggle {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.stage-btn {
+  border: none;
+  border-radius: 0;
+  padding: 0.25rem 0.7rem;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  background: var(--surface);
+}
+.stage-btn.active {
+  background: var(--accent);
+  color: var(--accent-contrast);
+  font-weight: 600;
+}
+
+/* Re-entry welcome-back card */
+.reentry-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+  margin: 0.6rem 0.8rem 0;
+  padding: 0.6rem 0.9rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+}
+.reentry-title {
+  margin: 0 0 0.15rem;
+  font-weight: 600;
+}
+.reentry-line {
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+/* Quick capture bar */
+.capture-bar {
+  padding: 0.35rem 0.8rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+.capture-bar input {
+  width: 100%;
+}
+
+/* Unstated-expectations bridge */
+.expectations {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.6rem 0.8rem;
+  margin: 0.8rem 0;
+  background: var(--surface);
+}
+.expectations h3 {
+  margin: 0 0 0.2rem;
+}
+.expectation-list {
+  list-style: none;
+  margin: 0.4rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+.expectation {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+.expectation-text {
+  margin: 0;
+  font-weight: 600;
+  font-size: 0.92rem;
+}
+.expectation-why {
+  margin: 0.1rem 0 0;
+  font-size: 0.82rem;
+  line-height: 1.4;
+}

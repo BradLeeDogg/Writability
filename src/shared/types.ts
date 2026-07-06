@@ -5,6 +5,7 @@
 import type { PaperFormat, PaperHeading } from './format'
 export type { PaperFormat, PaperHeading } from './format'
 
+export type PaperStage = 'draft' | 'polish'
 export type EssayType = 'argument' | 'research' | 'lab' | 'thesis' | 'reflection'
 
 export const ESSAY_TYPE_LABELS: Record<EssayType, string> = {
@@ -55,6 +56,8 @@ export interface PaperMeta {
   heading?: PaperHeading
   /** Whether the export numbers its pages. Defaults to on for set formats. */
   pageNumbers?: boolean
+  /** Writing stage: 'draft' defers spelling/review marks; 'polish' shows them. */
+  stage?: PaperStage
 }
 
 /** One concrete, checkable requirement pulled from (or added to) the prompt. */

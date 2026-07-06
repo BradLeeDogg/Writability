@@ -84,6 +84,12 @@ const PROBE = `(async () => {
   // The status bar shows an estimated page count once there are words.
   await waitFor('[data-testid="page-count"]', 'page-count in the status bar');
 
+  // Drafting stage: new papers start in Draft (no spelling marks); switching
+  // to Polish is what turns review marks on.
+  if (!q('[data-testid="stage-draft"]')) throw new Error('stage toggle missing');
+  (await waitFor('[data-testid="stage-polish"]', 'polish stage button')).click();
+  await sleep(120);
+
   // Linking-words menu inserts a phrase at the cursor.
   (await waitFor('[data-testid="linking-words"]', 'linking words menu')).click();
   (await waitFor('[data-testid="transition-phrase"]', 'a transition phrase')).click();
@@ -108,6 +114,17 @@ const PROBE = `(async () => {
   {
     const items = [...document.querySelectorAll('[data-testid="requirement-item"]')].map((e) => e.textContent || '');
     if (!items.some((t) => /Graded on:/i.test(t))) throw new Error('rubric criteria were not decoded into graded-on items');
+  }
+
+  // The vague-prompt bridge: a short "discuss" prompt surfaces unstated expectations.
+  setValue(q('[data-testid="assignment-prompt"]'), 'Discuss the role of memory in Beloved.');
+  await waitFor('[data-testid="expectations-bridge"]', 'unstated-expectations bridge');
+  {
+    const before = document.querySelectorAll('[data-testid="requirement-item"]').length;
+    q('[data-testid="expectation-add"]').click();
+    await sleep(120);
+    const after = document.querySelectorAll('[data-testid="requirement-item"]').length;
+    if (after !== before + 1) throw new Error('adding an expectation did not add a requirement');
   }
 
   // Brain dump: a judgement-free scratch space.
@@ -315,12 +332,21 @@ const PROBE = `(async () => {
   await sleep(80);
   if (q('[data-testid="find-bar"]')) throw new Error('find bar did not close');
 
+  // Quick capture: Ctrl+J banks a thought to Brain dump without leaving the page.
+  window.dispatchEvent(new KeyboardEvent('keydown', { key: 'j', ctrlKey: true, bubbles: true }));
+  const cap = await waitFor('[data-testid="capture-input"]', 'quick capture input');
+  setValue(cap, 'remember the counterargument');
+  cap.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+  await sleep(120);
+  if (q('[data-testid="capture-bar"]')) throw new Error('capture bar did not close');
+
   // Immersive "Read to me": opens a reader that highlights each word as it reads.
   (await waitFor('[data-testid="read-aloud"]', 'read-aloud button')).click();
   await waitFor('[data-testid="read-aloud-overlay"]', 'read-aloud overlay');
   await waitFor('[data-testid="reader-page"]', 'reader page');
   if (!document.querySelector('.reader-sentence')) throw new Error('reader rendered no sentences');
   if (!document.querySelector('.reader-word[data-wi]')) throw new Error('reader rendered no words to highlight');
+  if (!q('[data-testid="reader-pause"]')) throw new Error('reader has no pause control');
   (await waitFor('[data-testid="reader-close"]', 'reader close button')).click();
   await sleep(120);
   if (document.querySelector('[data-testid="read-aloud-overlay"]')) throw new Error('reader overlay did not close');

@@ -28,6 +28,8 @@ export function Toolbar(): JSX.Element {
   const saveFails = useStore((s) => s.saveFails)
   const rescueCopy = useStore((s) => s.rescueCopy)
   const saveNow = useStore((s) => s.save)
+  const setMeta = useStore((s) => s.setMeta)
+  const stage = current.meta.stage ?? 'polish'
 
   const [exporting, setExporting] = useState(false)
 
@@ -63,6 +65,26 @@ export function Toolbar(): JSX.Element {
           onChange={(e) => setTitle(e.target.value)}
         />
         <span className="essay-type">{ESSAY_TYPE_LABELS[current.meta.essayType]}</span>
+        <div className="stage-toggle" role="group" aria-label="Writing stage">
+          <button
+            className={'stage-btn' + (stage === 'draft' ? ' active' : '')}
+            data-testid="stage-draft"
+            aria-pressed={stage === 'draft'}
+            title="Drafting: spelling and review marks wait until you're ready"
+            onClick={() => setMeta({ stage: 'draft' })}
+          >
+            Draft
+          </button>
+          <button
+            className={'stage-btn' + (stage === 'polish' ? ' active' : '')}
+            data-testid="stage-polish"
+            aria-pressed={stage === 'polish'}
+            title="Polishing: show spelling and review marks"
+            onClick={() => setMeta({ stage: 'polish' })}
+          >
+            Polish
+          </button>
+        </div>
         {saveState === 'error' ? (
           <span className="save-state error" aria-live="polite">
             Not saved —{' '}

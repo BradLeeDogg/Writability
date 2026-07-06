@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useStore } from '../store/useStore'
 import { copyText } from '../lib/format'
-import { CITATION_STYLE_LABELS, formatCitation } from '@shared/citations'
+import { CITATION_STYLE_LABELS, formatCitation, referenceSegments } from '@shared/citations'
 import { uid } from '@shared/ids'
 import type { CitationSource, CitationStyle, SourceType } from '@shared/types'
 
@@ -108,7 +108,11 @@ export function CitationsPanel(): JSX.Element {
               const f = formatCitation(s, style)
               return (
                 <li key={s.id} className="source">
-                  <p className="source-ref">{f.reference}</p>
+                  <p className="source-ref">
+                    {referenceSegments(s, style).map((seg, i) =>
+                      seg.italic ? <em key={i}>{seg.text}</em> : <span key={i}>{seg.text}</span>
+                    )}
+                  </p>
                   <p className="source-intext">In-text: {f.inText}</p>
                   <div className="row wrap">
                     <button className="ghost small" onClick={() => void doCopy(s.id + '-ref', f.reference)}>

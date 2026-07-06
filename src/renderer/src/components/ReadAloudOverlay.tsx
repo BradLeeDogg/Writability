@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useStore } from '../store/useStore'
 import { docToPlainText, splitSentences, splitWords, sentenceIndexAt, wordIndexAt } from '@shared/doc'
-import { speak, stopSpeaking, ttsSupported } from '../lib/tts'
+import { isPaused, pauseSpeaking, resumeSpeaking, speak, stopSpeaking, ttsSupported } from '../lib/tts'
 
 // Immersive "Read to me" mode. A calm, full-screen reader that uses the
 // student's own font/size/spacing and highlights each *word* as it is spoken,
@@ -31,6 +31,7 @@ export function ReadAloudOverlay(): JSX.Element | null {
   }, [words, sentences])
 
   const [activeWord, setActiveWord] = useState(0)
+  const [paused, setPaused] = useState(false)
   const activeSentence = words[activeWord] ? sentenceIndexAt(sentences, words[activeWord].start) : 0
   const activeRef = useRef<HTMLSpanElement>(null)
 
@@ -45,7 +46,33 @@ export function ReadAloudOverlay(): JSX.Element | null {
       onBoundary: (ci) => setActiveWord(wordIndexAt(words, charIndex + ci))
     })
   }
-  const start = (): void => speakFrom(0)
+  const start = (): void => {
+    setPaused(false)
+    speakFrom(0)
+  }
+
+  const togglePause = (): void => {
+    if (isPaused()) {
+      resumeSpeaking()
+      setPaused(false)
+    } else if (ttsSupported() && window.speechSynthesis.speaking) {
+      pauseSpeaking()
+      setPaused(true)
+    } else {
+      // Engine isn't speaking (or ignored pause): restart from the active word.
+      const w = words[activeWord]
+      if (w) speakFrom(w.start)
+      setPaused(false)
+    }
+  }
+
+  const jumpSentence = (delta: number): void => {
+    const target = sentences[Math.max(0, Math.min(sentences.length - 1, activeSentence + delta))]
+    if (target) {
+      setPaused(false)
+      speakFrom(target.start)
+    }
+  }
 
   // Start reading when the overlay opens; stop on close/unmount.
   useEffect(() => {
@@ -65,10 +92,17 @@ export function ReadAloudOverlay(): JSX.Element | null {
     if (!open) return
     const onKey = (e: KeyboardEvent): void => {
       if (e.key === 'Escape') close()
+      if (e.key === ' ') {
+        e.preventDefault()
+        togglePause()
+      }
+      if (e.key === 'ArrowRight') jumpSentence(1)
+      if (e.key === 'ArrowLeft') jumpSentence(-1)
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [open, close])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, close, activeSentence, activeWord, sentences, words])
 
   if (!open) return null
 
@@ -85,6 +119,9 @@ export function ReadAloudOverlay(): JSX.Element | null {
       <div className="reader-bar">
         <span className="reader-title">Reading to you</span>
         <div className="reader-controls">
+          <button className="ghost" data-testid="reader-pause" aria-pressed={paused} onClick={togglePause}>
+            {paused ? '▶ Resume' : '⏸ Pause'}
+          </button>
           <button className="ghost" data-testid="reader-restart" onClick={start}>
             ↻ Start over
           </button>
@@ -117,7 +154,7 @@ export function ReadAloudOverlay(): JSX.Element | null {
       </div>
       {!ttsSupported() && (
         <p className="reader-note muted">
-          This device has no built-in voice, so there’s no audio — but you can still read along.
+          This device has no built-in voice, so there’s no audio — but you can still read along. Space pauses; ← and → move a sentence.
         </p>
       )}
     </div>

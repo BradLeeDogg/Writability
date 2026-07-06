@@ -13,6 +13,10 @@ import { ensureSpell, setCustomWords } from '../lib/spell'
 import { outlineToDocContent } from '@shared/scaffold'
 import { TRANSITIONS } from '@shared/transitions'
 import { pageStats } from '@shared/format'
+import { nextAction } from '@shared/planner'
+
+// Papers whose re-entry card was dismissed this session.
+const reentryDismissed = new Set<string>()
 
 export function Editor(): JSX.Element {
   // App only mounts the Editor when a paper is open.
@@ -26,12 +30,17 @@ export function Editor(): JSX.Element {
   const customWords = useStore((s) => s.settings.customWords)
   const addCustomWord = useStore((s) => s.addCustomWord)
   const setEditorInstance = useStore((s) => s.setEditorInstance)
+  const setScratch = useStore((s) => s.setScratch)
+  const showToast = useStore((s) => s.showToast)
+  const stage = current.meta.stage ?? 'polish'
+  const drafting = stage === 'draft'
 
   const editor = useEditor({
     extensions: [
       StarterKit,
       Placeholder.configure({
-        placeholder: 'Start writing here. You can begin anywhere — the outline is here to help.'
+        placeholder:
+          'Start writing here. You can begin anywhere — the outline is here to help. First drafts are allowed to be rough.'
       }),
       CharacterCount,
       Spotlight,
@@ -68,22 +77,25 @@ export function Editor(): JSX.Element {
     if (editor) editor.view.dispatch(editor.state.tr.setMeta(spotlightKey, spotlightMode))
   }, [editor, spotlightMode])
   useEffect(() => {
-    if (editor) editor.view.dispatch(editor.state.tr.setMeta(glossaryKey, defineTerms))
-  }, [editor, defineTerms])
+    if (editor) editor.view.dispatch(editor.state.tr.setMeta(glossaryKey, defineTerms && !drafting))
+  }, [editor, defineTerms, drafting])
 
   // Spellcheck: flip the flags, and build the dictionary the first time it's
   // wanted (then nudge a recompute once it's ready).
   useEffect(() => {
     if (!editor) return
     editor.view.dispatch(
-      editor.state.tr.setMeta(spellcheckKey, { enabled: spellHelp, homophones: homophoneHelp })
+      editor.state.tr.setMeta(spellcheckKey, {
+        enabled: spellHelp && !drafting,
+        homophones: homophoneHelp && !drafting
+      })
     )
     if (spellHelp) {
       ensureSpell(() => {
         if (!editor.isDestroyed) editor.view.dispatch(editor.state.tr.setMeta(spellcheckKey, {}))
       })
     }
-  }, [editor, spellHelp, homophoneHelp])
+  }, [editor, spellHelp, homophoneHelp, drafting])
 
   // Keep the spell engine's personal dictionary in sync, and re-scan when it
   // changes so newly-taught words lose their underline.
@@ -149,6 +161,42 @@ export function Editor(): JSX.Element {
     setRulerTop(e.clientY - rect.top + el.scrollTop)
   }
 
+  // Re-entry: after 48+ hours away, one dismissible "welcome back" card that
+  // says where you were and the next small step. Never guilt, never a modal.
+  const [showReentry, setShowReentry] = useState(() => {
+    if (reentryDismissed.has(current.meta.id)) return false
+    const away = Date.now() - Date.parse(current.meta.updatedAt)
+    return away > 48 * 60 * 60 * 1000
+  })
+  const reentryStep = useMemo(() => nextAction(current.content.outline), [current.content.outline])
+  const scratchNote = (current.content.scratch || '').split('\n').find((l) => l.trim()) ?? ''
+  const dismissReentry = (): void => {
+    reentryDismissed.add(current.meta.id)
+    setShowReentry(false)
+  }
+
+  // Quick capture: Ctrl/Cmd+J banks a fleeting thought to Brain dump without
+  // leaving the page or losing the cursor.
+  const [captureOpen, setCaptureOpen] = useState(false)
+  const [captureText, setCaptureText] = useState('')
+  const captureRef = useRef<HTMLInputElement>(null)
+  const openCapture = (): void => {
+    setCaptureOpen(true)
+    setTimeout(() => captureRef.current?.focus(), 0)
+  }
+  const saveCapture = (): void => {
+    const text = captureText.trim()
+    if (text) {
+      const cur = useStore.getState().current
+      const prev = cur?.content.scratch ?? ''
+      setScratch(prev ? prev + '\n– ' + text : '– ' + text)
+      showToast('Saved to Brain dump.')
+    }
+    setCaptureText('')
+    setCaptureOpen(false)
+    editor?.commands.focus()
+  }
+
   // Find & replace: Ctrl/Cmd+F opens a small inline bar; Esc closes it.
   const [findOpen, setFindOpen] = useState(false)
   const [findQuery, setFindQuery] = useState('')
@@ -209,6 +257,10 @@ export function Editor(): JSX.Element {
         e.preventDefault()
         openFind()
       }
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'j') {
+        e.preventDefault()
+        openCapture()
+      }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
@@ -230,6 +282,44 @@ export function Editor(): JSX.Element {
     <section className="editor-wrap" data-testid="editor" aria-label="Writing area">
       <ThesisPin />
       <FormatBar editor={editor} onInsertOutline={insertOutline} />
+      {showReentry && (
+        <div className="reentry-card" data-testid="reentry-card">
+          <div className="reentry-body">
+            <p className="reentry-title">Welcome back.</p>
+            {reentryStep && (
+              <p className="reentry-line">
+                Your next small step: <strong>{reentryStep.label}</strong>
+              </p>
+            )}
+            {scratchNote && (
+              <p className="reentry-line muted">Your note to yourself: “{scratchNote}”</p>
+            )}
+          </div>
+          <button className="ghost" data-testid="reentry-dismiss" onClick={dismissReentry}>
+            Got it
+          </button>
+        </div>
+      )}
+      {captureOpen && (
+        <div className="capture-bar" data-testid="capture-bar">
+          <input
+            ref={captureRef}
+            data-testid="capture-input"
+            value={captureText}
+            placeholder="A thought to keep for later — saved to Brain dump…"
+            aria-label="Quick note to Brain dump"
+            onChange={(e) => setCaptureText(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') saveCapture()
+              if (e.key === 'Escape') {
+                setCaptureOpen(false)
+                setCaptureText('')
+                editor?.commands.focus()
+              }
+            }}
+          />
+        </div>
+      )}
       {findOpen && (
         <div className="find-bar" data-testid="find-bar" role="search" aria-label="Find in paper">
           <input

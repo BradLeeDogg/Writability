@@ -195,6 +195,44 @@ export function formatCitation(source: CitationSource, style: CitationStyle): Fo
   return { inText: inText(source, style), reference }
 }
 
+/** A reference split into styled runs so titles can be italicised properly
+ *  (MLA/APA/Chicago all require it). Falls back to one roman segment. */
+export interface ReferenceSegment {
+  text: string
+  italic: boolean
+}
+
+export function referenceSegments(source: CitationSource, style: CitationStyle): ReferenceSegment[] {
+  const reference = formatCitation(source, style).reference
+  // What gets italicised: a book's title; otherwise the container (journal/site).
+  const italicised: string[] = []
+  if (source.type === 'book' && source.title) italicised.push(source.title)
+  else if (source.containerTitle) italicised.push(source.containerTitle)
+  if (style === 'apa' && source.type === 'journal' && source.volume) italicised.push(source.volume)
+
+  let segments: ReferenceSegment[] = [{ text: reference, italic: false }]
+  for (const target of italicised) {
+    const next: ReferenceSegment[] = []
+    for (const seg of segments) {
+      if (seg.italic) {
+        next.push(seg)
+        continue
+      }
+      const i = seg.text.indexOf(target)
+      if (i === -1) {
+        next.push(seg)
+        continue
+      }
+      if (i > 0) next.push({ text: seg.text.slice(0, i), italic: false })
+      next.push({ text: target, italic: true })
+      if (i + target.length < seg.text.length)
+        next.push({ text: seg.text.slice(i + target.length), italic: false })
+    }
+    segments = next
+  }
+  return segments
+}
+
 export const CITATION_STYLE_LABELS: Record<CitationStyle, string> = {
   mla: 'MLA (9th)',
   apa: 'APA (7th)',

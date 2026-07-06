@@ -49,6 +49,18 @@ export function speak(text: string, opts: SpeakOptions = {}): boolean {
   return true
 }
 
+export function pauseSpeaking(): void {
+  if (ttsSupported() && window.speechSynthesis.speaking) window.speechSynthesis.pause()
+}
+
+export function resumeSpeaking(): void {
+  if (ttsSupported()) window.speechSynthesis.resume()
+}
+
+export function isPaused(): boolean {
+  return ttsSupported() && window.speechSynthesis.paused
+}
+
 export function stopSpeaking(): void {
   if (ttsSupported()) window.speechSynthesis.cancel()
 }

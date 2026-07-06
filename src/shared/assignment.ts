@@ -352,3 +352,50 @@ export function decodeAssignment(prompt: string): DecodeResult {
     requirements: extractRequirements(prompt)
   }
 }
+
+// --- The vague-prompt bridge -------------------------------------------------
+// When a prompt has instruction words but almost no concrete requirements
+// ("Discuss the role of memory in Beloved."), these are the unstated
+// expectations of college writing, phrased literally. Offline, no AI.
+
+export interface ExpectationItem {
+  text: string
+  why: string
+  /** True when the honest answer is "ask your teacher" — adding it also gives
+   *  the student a ready-to-send question. */
+  ask?: boolean
+  question?: string
+}
+
+export const UNSTATED_EXPECTATIONS: ExpectationItem[] = [
+  {
+    text: 'Take one clear position (an arguable thesis).',
+    why: 'At college, "discuss" and "analyze" still expect you to argue one main idea, not just describe.'
+  },
+  {
+    text: 'Back every point with evidence from the text or a source.',
+    why: 'Statements without evidence read as opinion and lose marks.'
+  },
+  {
+    text: 'Cite every quote and idea that is not yours.',
+    why: 'Citations are expected even when the prompt does not mention them.'
+  },
+  {
+    text: 'Find out the expected length.',
+    why: 'The prompt does not say. It is normal and fine to ask.',
+    ask: true,
+    question: 'Could you tell me the expected length for this paper?'
+  },
+  {
+    text: 'Find out how many sources are expected.',
+    why: 'The prompt does not say. It is normal and fine to ask.',
+    ask: true,
+    question: 'Could you tell me how many sources you expect us to use?'
+  }
+]
+
+/** Show the bridge when instruction words were found but the prompt yielded
+ *  almost nothing concrete — the "vague prompt" case. */
+export function needsExpectationsBridge(result: DecodeResult): boolean {
+  return result.commandWords.length > 0 && result.requirements.length < 2
+}
