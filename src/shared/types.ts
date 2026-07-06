@@ -58,6 +58,8 @@ export interface PaperMeta {
   pageNumbers?: boolean
   /** Writing stage: 'draft' defers spelling/review marks; 'polish' shows them. */
   stage?: PaperStage
+  /** Lean mode: hide the writing prompts once the student knows the steps. */
+  hidePrompts?: boolean
 }
 
 /** One concrete, checkable requirement pulled from (or added to) the prompt. */
@@ -88,6 +90,8 @@ export interface Card {
   color: CardColor
   /** Optional id of the top-level outline section this idea belongs to. */
   section?: string
+  /** True when the card text came from the AI brainstorm (provenance stays visible). */
+  fromAi?: boolean
 }
 
 export const CARD_COLORS: CardColor[] = ['yellow', 'blue', 'green', 'pink']

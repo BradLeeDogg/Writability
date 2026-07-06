@@ -76,7 +76,7 @@ interface StoreState {
   restoreFromTrash: (id: string) => Promise<void>
 
   // papers
-  createPaper: (input: { title: string; essayType: EssayType; format?: PaperFormat }) => Promise<void>
+  createPaper: (input: { title: string; essayType: EssayType; format?: PaperFormat; lean?: boolean }) => Promise<void>
   openPaper: (id: string) => Promise<void>
   closePaper: () => Promise<void>
   deletePaper: (id: string) => Promise<void>
@@ -95,7 +95,7 @@ interface StoreState {
 
   // planning board (cards)
   addCard: (text?: string) => void
-  addCardsFromText: (text: string) => void
+  addCardsFromText: (text: string, fromAi?: boolean) => void
   updateCardText: (id: string, text: string) => void
   updateCardSection: (id: string, section: string | undefined) => void
   cycleCardColor: (id: string) => void
@@ -295,6 +295,7 @@ export const useStore = create<StoreState>()((set, get) => {
     },
 
     async openPaper(id) {
+      void window.api.takeSnapshot(id)
       const paper = await window.api.openPaper(id)
       if (!paper) {
         await get().refreshPapers()
@@ -400,7 +401,7 @@ export const useStore = create<StoreState>()((set, get) => {
       patchContent({ cards: [...cur.content.cards, card] })
     },
 
-    addCardsFromText(text) {
+    addCardsFromText(text, fromAi) {
       const cur = get().current
       if (!cur) return
       const items = splitIntoItems(text)
@@ -411,6 +412,7 @@ export const useStore = create<StoreState>()((set, get) => {
         text: t,
         x: 24 + (i % 4) * 184,
         y: 24 + Math.floor(i / 4) * 150 + (base > 0 ? 12 : 0),
+        fromAi: fromAi || undefined,
         color: CARD_COLORS[(base + i) % CARD_COLORS.length]
       }))
       patchContent({ cards: [...cur.content.cards, ...newCards] })

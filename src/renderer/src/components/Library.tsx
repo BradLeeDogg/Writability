@@ -25,9 +25,10 @@ export function Library(): JSX.Element {
   const [title, setTitle] = useState('')
   const [essayType, setEssayType] = useState<EssayType>('argument')
   const [format, setFormat] = useState<PaperFormat>('mla')
+  const [lean, setLean] = useState(false)
 
   const onCreate = async (): Promise<void> => {
-    await createPaper({ title: title.trim() || 'Untitled paper', essayType, format })
+    await createPaper({ title: title.trim() || 'Untitled paper', essayType, format, lean })
     setShowNew(false)
     setTitle('')
     setEssayType('argument')
@@ -100,6 +101,16 @@ export function Library(): JSX.Element {
             </div>
             <p className="muted small">{PAPER_FORMATS.find((f) => f.value === format)?.blurb}</p>
           </fieldset>
+
+          <label className="toggle">
+            <input
+              type="checkbox"
+              data-testid="create-lean"
+              checked={lean}
+              onChange={(e) => setLean(e.target.checked)}
+            />
+            <span>Start lean — same steps, without the writing prompts</span>
+          </label>
 
           <div className="row">
             <button className="primary" data-testid="create-paper" onClick={() => void onCreate()}>

@@ -24,6 +24,8 @@ export interface CreatePaperInput {
   title: string
   essayType: EssayType
   format?: PaperFormat
+  /** Start lean: same structure, no writing prompts (scaffolding fade). */
+  lean?: boolean
 }
 
 export interface SavePaperInput {
@@ -99,6 +101,10 @@ export interface WritabilityApi {
   restorePaper(id: string): Promise<{ ok: boolean }>
   /** Emergency plain-text save of the current document (save dialog). */
   rescueText(title: string, text: string): Promise<{ ok: boolean; canceled?: boolean; path?: string }>
+  /** Quiet per-paper history: take/list/restore content snapshots. */
+  takeSnapshot(id: string): Promise<{ file: string; at: string; words: number } | null>
+  listSnapshots(id: string): Promise<{ file: string; at: string; words: number }[]>
+  restoreSnapshot(id: string, file: string): Promise<{ ok: boolean }>
 
   // Settings --------------------------------------------------------------
   getSettings(): Promise<AppSettings>

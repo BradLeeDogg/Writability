@@ -48,6 +48,9 @@ const PROBE = `(async () => {
   await waitFor('[data-testid="library"]', 'library view');
   (await waitFor('[data-testid="new-paper"]', 'new paper button')).click();
 
+  // New-paper dialog: the lean option exists (scaffolding fade).
+  await waitFor('[data-testid="create-lean"]', 'lean-start option');
+
   // New-paper dialog -> pick a format, then create.
   (await waitFor('[data-testid="format-mla"]', 'MLA format chip')).click();
   (await waitFor('[data-testid="create-paper"]', 'create paper button')).click();
@@ -57,6 +60,18 @@ const PROBE = `(async () => {
   await waitFor('[data-testid="outline"]', 'outline panel');
   if (!document.querySelector('[data-testid="outline-node"]')) {
     throw new Error('outline rendered no scaffold steps');
+  }
+
+  // Scaffolding fade: hiding writing prompts removes them; turning back restores.
+  {
+    const promptsBefore = document.querySelectorAll('.outline-prompt').length;
+    if (!promptsBefore) throw new Error('no outline prompts rendered');
+    (await waitFor('[data-testid="toggle-prompts"]', 'prompts toggle')).click();
+    await sleep(120);
+    if (document.querySelectorAll('.outline-prompt').length !== 0) throw new Error('prompts still visible in lean mode');
+    q('[data-testid="toggle-prompts"]').click();
+    await sleep(120);
+    if (!document.querySelectorAll('.outline-prompt').length) throw new Error('prompts did not come back');
   }
 
   // Thesis pin is docked above the writing area.

@@ -76,3 +76,13 @@ export function splitIntoItems(text: string): string[] {
     .filter((l) => l.length > 0)
   return lines.length > 0 ? lines : (text || '').trim() ? [(text || '').trim()] : []
 }
+
+/** Student-facing summary of the AI contract, kept in lockstep with the
+ *  prompts above (the self-test pins them together). */
+export const INTEGRITY_STATEMENT =
+  'What the AI helper will and will not do:\n' +
+  '- It suggests ideas, structures, and questions. Each suggestion is a short phrase, never finished writing.\n' +
+  '- It gives feedback by pointing at your own sentences and asking questions.\n' +
+  '- It never writes your thesis, your paragraphs, or your sentences. You are the author of every word.\n' +
+  '- It runs only when you press an AI button, using your own key. Nothing is sent automatically.\n' +
+  'Ideas that came from the AI stay marked with a small ✦ so you always know which thoughts were yours.'

@@ -12,6 +12,9 @@ const api: WritabilityApi = {
   listTrash: () => ipcRenderer.invoke('papers:list-trash'),
   restorePaper: (id) => ipcRenderer.invoke('papers:restore', id),
   rescueText: (title, text) => ipcRenderer.invoke('papers:rescue', title, text),
+  takeSnapshot: (id) => ipcRenderer.invoke('snapshots:take', id),
+  listSnapshots: (id) => ipcRenderer.invoke('snapshots:list', id),
+  restoreSnapshot: (id, file) => ipcRenderer.invoke('snapshots:restore', id, file),
 
   getSettings: () => ipcRenderer.invoke('settings:get'),
   saveSettings: (settings) => ipcRenderer.invoke('settings:save', settings),

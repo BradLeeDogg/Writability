@@ -8,7 +8,8 @@ import { renderExport } from './services/export'
 import { applyBundle, buildBundle } from './services/backup'
 import { runAiTask } from './services/ai'
 import { dataDir, settingsPath } from './services/paths'
-import { buildPrompt, isValidModel, splitIntoItems } from '@shared/ai'
+import { listSnapshots, restoreSnapshot, snapshotPaper } from './services/snapshots'
+import { buildPrompt, isValidModel, splitIntoItems, INTEGRITY_STATEMENT } from '@shared/ai'
 import { analyzeClarity, suggestSentenceSplit } from '@shared/clarity'
 import { decodeAssignment, needsExpectationsBridge, UNSTATED_EXPECTATIONS } from '@shared/assignment'
 import { outlineToDocContent } from '@shared/scaffold'
@@ -604,6 +605,28 @@ export async function runSelftest(): Promise<void> {
     assert.ok(listPapers().some((p) => p.id === trPaper.meta.id), 'restored paper is back in the library')
     assert.ok(!listTrash().some((p) => p.id === trPaper.meta.id), 'restored paper leaves the trash')
     pass('trash round-trip')
+
+    // --- snapshots: quiet history, restore never loses anything ---------
+    const snapPaper = createPaper({ title: 'Snapshot me', essayType: 'argument' })
+    snapPaper.content.doc = { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'version one' }] }] }
+    savePaper({ meta: snapPaper.meta, content: snapPaper.content })
+    const snap1 = snapshotPaper(snapPaper.meta.id)
+    assert.ok(snap1, 'snapshot is written')
+    snapPaper.content.doc = { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'version two' }] }] }
+    savePaper({ meta: snapPaper.meta, content: snapPaper.content })
+    assert.equal(restoreSnapshot(snapPaper.meta.id, snap1!.file).ok, true, 'restore succeeds')
+    const snapRestored = openPaper(snapPaper.meta.id)
+    assert.ok(docToPlainText(snapRestored!.content.doc).includes('version one'), 'restore brings back the old text')
+    assert.ok(listSnapshots(snapPaper.meta.id).length >= 2, 'restoring snapshots the pre-restore state first')
+    for (let i = 0; i < 25; i++) snapshotPaper(snapPaper.meta.id)
+    assert.ok(listSnapshots(snapPaper.meta.id).length <= 20, 'old snapshots are pruned to the newest 20')
+    pass('snapshots (history + restore + prune)')
+
+    // --- tone pins: overdue copy stays factual and kind; AI contract ----
+    assert.ok(overdue && /Pick one step and start there/.test(overdue.message), 'overdue copy offers a next step, not guilt')
+    assert.ok(!/overdue!|late!|hurry/i.test(overdue!.message), 'overdue copy has no alarm language')
+    assert.ok(/never writes your thesis/i.test(INTEGRITY_STATEMENT), 'integrity statement states the no-ghostwriting contract')
+    pass('tone pins (overdue + AI contract)')
 
     console.log(`SELFTEST_OK (${checks.length} checks: ${checks.join(', ')})`)
     cleanup()

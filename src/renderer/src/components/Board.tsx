@@ -101,7 +101,7 @@ export function Board(): JSX.Element {
     const res = await runAi({ task: 'brainstorm', text: value })
     setBusy(false)
     if (res.ok) {
-      addCardsFromText(res.text ?? '')
+      addCardsFromText(res.text ?? '', true)
       setTopic('')
     } else {
       setAiError(res.error ?? 'Something went wrong.')
@@ -245,6 +245,11 @@ export function Board(): JSX.Element {
                           ×
                         </button>
                       </div>
+                      {card.fromAi && (
+                        <span className="ai-badge-card" title="This idea came from the AI helper">
+                          ✦ AI suggestion
+                        </span>
+                      )}
                       <textarea
                         className="card-text"
                         value={card.text}
@@ -309,6 +314,11 @@ export function Board(): JSX.Element {
                     ×
                   </button>
                 </div>
+                {card.fromAi && (
+                  <span className="ai-badge-card" title="This idea came from the AI helper">
+                    ✦ AI suggestion
+                  </span>
+                )}
                 <textarea
                   className="card-text"
                   value={card.text}

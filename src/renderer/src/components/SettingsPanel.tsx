@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useStore } from '../store/useStore'
-import { AI_MODELS } from '@shared/ai'
+import { AI_MODELS, INTEGRITY_STATEMENT } from '@shared/ai'
 import { sortVoices } from '@shared/voices'
 import { listVoices, onVoicesChanged, speak } from '../lib/tts'
 import type { FontChoice, OverlayTint, ThemeName } from '@shared/types'
@@ -36,6 +36,25 @@ export function SettingsPanel(): JSX.Element {
   const createBackup = useStore((s) => s.createBackup)
   const restoreBackup = useStore((s) => s.restoreBackup)
   const replayWelcome = useStore((s) => s.replayWelcome)
+  const currentId = useStore((s) => s.current?.meta.id)
+  const openPaperAgain = useStore((s) => s.openPaper)
+  const [snaps, setSnaps] = useState<{ file: string; at: string; words: number }[] | null>(null)
+  const loadSnaps = async (): Promise<void> => {
+    if (currentId) setSnaps(await window.api.listSnapshots(currentId))
+  }
+  const restoreSnap = async (file: string): Promise<void> => {
+    if (!currentId) return
+    const ok = await askConfirm({
+      title: 'Go back to this version?',
+      body: 'Your current version is saved as a snapshot first, so you can return to it.',
+      confirmLabel: 'Restore this version'
+    })
+    if (!ok) return
+    await window.api.restoreSnapshot(currentId, file)
+    await openPaperAgain(currentId)
+    showToast('Version restored. Your previous state was snapshotted too.')
+    void loadSnaps()
+  }
 
   // Voices can arrive asynchronously after the page loads.
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([])
@@ -343,6 +362,33 @@ export function SettingsPanel(): JSX.Element {
         <button className="ghost block" onClick={replayWelcome}>
           Show the welcome guide again
         </button>
+        {currentId && (
+          <details className="history" data-testid="history" onToggle={(e) => { if ((e.target as HTMLDetailsElement).open) void loadSnaps() }}>
+            <summary>History for this paper…</summary>
+            <p className="muted small">
+              Writability quietly saves a snapshot each time you open this paper. Restoring never
+              loses anything — the current version is snapshotted first.
+            </p>
+            {snaps === null ? (
+              <p className="muted small">Loading…</p>
+            ) : snaps.length === 0 ? (
+              <p className="muted small">No snapshots yet.</p>
+            ) : (
+              <ul className="history-list">
+                {snaps.map((sn) => (
+                  <li key={sn.file} className="history-row">
+                    <span>
+                      {new Date(sn.at).toLocaleString()} · {sn.words} words
+                    </span>
+                    <button className="ghost small" data-testid="restore-snapshot" onClick={() => void restoreSnap(sn.file)}>
+                      Restore
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </details>
+        )}
       </fieldset>
 
       <fieldset className="setting">
@@ -364,6 +410,19 @@ export function SettingsPanel(): JSX.Element {
             onChange={(e) => update({ aiApiKey: e.target.value })}
           />
         </label>
+        <details className="ai-contract" data-testid="ai-contract">
+          <summary>What the AI helper will and won’t do</summary>
+          <pre className="ai-contract-text">{INTEGRITY_STATEMENT}</pre>
+          <button
+            className="ghost small"
+            onClick={() => {
+              void navigator.clipboard.writeText(INTEGRITY_STATEMENT)
+              showToast('Statement copied — you can share it with your teacher.')
+            }}
+          >
+            Copy statement
+          </button>
+        </details>
         <label className="field">
           <span>Model</span>
           <select

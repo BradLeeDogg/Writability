@@ -41,6 +41,15 @@ const EMPTY: Draft = {
 }
 
 export function CitationsPanel(): JSX.Element {
+  const editorInstance = useStore((st) => st.editorInstance)
+  const showToastCit = useStore((st) => st.showToast)
+  const [sourceFilter, setSourceFilter] = useState('')
+  const insertInText = (marker: string): void => {
+    if (editorInstance && !editorInstance.isDestroyed) {
+      editorInstance.chain().focus().insertContent(marker + ' ').run()
+      showToastCit('Citation added where your cursor was.')
+    }
+  }
   const current = useStore((s) => s.current)!
   const addSource = useStore((s) => s.addSource)
   const removeSource = useStore((s) => s.removeSource)
@@ -100,11 +109,30 @@ export function CitationsPanel(): JSX.Element {
       </div>
 
       <section className="source-list" aria-label="Your sources">
+        {sources.length > 5 && (
+          <input
+            className="source-filter"
+            data-testid="source-filter"
+            value={sourceFilter}
+            placeholder="Find a source (name, title, year)…"
+            aria-label="Filter sources"
+            onChange={(e) => setSourceFilter(e.target.value)}
+          />
+        )}
         {sources.length === 0 ? (
           <p className="muted">No sources yet. Add one below and it will be formatted for you.</p>
         ) : (
           <ul>
-            {sources.map((s) => {
+            {sources
+              .filter((s) => {
+                const q = sourceFilter.trim().toLowerCase()
+                if (!q) return true
+                return [s.title, s.authors.join(' '), s.year ?? '', s.containerTitle ?? '']
+                  .join(' ')
+                  .toLowerCase()
+                  .includes(q)
+              })
+              .map((s) => {
               const f = formatCitation(s, style)
               return (
                 <li key={s.id} className="source">
@@ -121,6 +149,16 @@ export function CitationsPanel(): JSX.Element {
                     <button className="ghost small" onClick={() => void doCopy(s.id + '-in', f.inText)}>
                       {copied === s.id + '-in' ? 'Copied' : 'Copy in-text'}
                     </button>
+                    {editorInstance && (
+                      <button
+                        className="ghost small"
+                        data-testid="insert-citation"
+                        title="Put the in-text citation where your cursor is"
+                        onClick={() => insertInText(f.inText)}
+                      >
+                        Insert in paper
+                      </button>
+                    )}
                     <button
                       className="ghost small danger"
                       aria-label="Remove source"

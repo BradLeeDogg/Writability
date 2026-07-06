@@ -4,6 +4,7 @@ import * as settings from '../services/settings'
 import { exportPaper } from '../services/export'
 import { createBackup, restoreBackup } from '../services/backup'
 import { runAiTask } from '../services/ai'
+import { listSnapshots, restoreSnapshot, snapshotPaper } from '../services/snapshots'
 import { dataDir } from '../services/paths'
 import { writeFile } from 'fs/promises'
 import { join } from 'path'
@@ -21,6 +22,9 @@ export function registerIpc(): void {
   ipcMain.handle('papers:delete', (_e, id: string) => papers.deletePaper(id))
   ipcMain.handle('papers:list-trash', () => papers.listTrash())
   ipcMain.handle('papers:restore', (_e, id: string) => papers.restorePaper(id))
+  ipcMain.handle('snapshots:take', (_e, id: string) => snapshotPaper(id))
+  ipcMain.handle('snapshots:list', (_e, id: string) => listSnapshots(id))
+  ipcMain.handle('snapshots:restore', (_e, id: string, file: string) => restoreSnapshot(id, file))
   // Emergency plain-text save when normal saving is failing.
   ipcMain.handle('papers:rescue', async (_e, title: string, text: string) => {
     const safe = (title || 'paper').replace(/[^\w\- ]+/g, '').trim() || 'paper'
