@@ -36,6 +36,7 @@ export function docToPlainText(doc: unknown): string {
   }
 
   const collectInline = (node: DocNode): string => {
+    if (node.type === 'footnote') return '' // notes are exported, not read aloud
     if (node.text) return node.text
     if (!node.content) return ''
     return node.content.map(collectInline).join('')
@@ -174,4 +175,57 @@ export function sentenceIndexAt(sentences: Sentence[], charIndex: number): numbe
 /** Which word contains a given source offset (the last one starting at/before it). */
 export function wordIndexAt(words: Word[], charIndex: number): number {
   return spanIndexAt(words, charIndex)
+}
+
+// --- Footnotes ---------------------------------------------------------------
+export type ParaSegment = { text: string } | { footnote: number }
+
+export interface DocWithNotes {
+  /** Block paragraphs as ordered segments (text runs and footnote markers). */
+  paragraphs: ParaSegment[][]
+  /** Footnote texts, in document order (1-based numbering = index + 1). */
+  notes: string[]
+}
+
+interface FnNode {
+  type?: string
+  text?: string
+  attrs?: { text?: string }
+  content?: FnNode[]
+}
+
+const FN_BLOCKS = new Set(['paragraph', 'heading', 'blockquote', 'listItem', 'codeBlock'])
+
+/** Flatten a doc into paragraph segments plus an ordered footnote list, so the
+ *  exporters can place real footnote references. Pure and schema-tolerant. */
+export function docToParagraphsWithNotes(doc: unknown): DocWithNotes {
+  const notes: string[] = []
+  const paragraphs: ParaSegment[][] = []
+  const root = doc as FnNode | null | undefined
+  if (!root || typeof root !== 'object') return { paragraphs, notes }
+
+  const collect = (node: FnNode, out: ParaSegment[]): void => {
+    if (node.type === 'footnote') {
+      notes.push((node.attrs?.text ?? '').trim())
+      out.push({ footnote: notes.length })
+      return
+    }
+    if (node.text) {
+      out.push({ text: node.text })
+      return
+    }
+    for (const child of node.content ?? []) collect(child, out)
+  }
+
+  const walk = (node: FnNode): void => {
+    if (node.type && FN_BLOCKS.has(node.type)) {
+      const segs: ParaSegment[] = []
+      collect(node, segs)
+      if (segs.length) paragraphs.push(segs)
+      return
+    }
+    for (const child of node.content ?? []) walk(child)
+  }
+  walk(root)
+  return { paragraphs, notes }
 }

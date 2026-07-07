@@ -4,7 +4,7 @@
 // setting just dispatches an empty transaction and the decorations recompute.
 // Neither ever changes the document, so they never trigger a save.
 
-import { Extension } from '@tiptap/core'
+import { Extension, Node } from '@tiptap/core'
 import { Plugin, PluginKey } from '@tiptap/pm/state'
 import type { Node as PMNode } from '@tiptap/pm/model'
 import { Decoration, DecorationSet } from '@tiptap/pm/view'
@@ -255,5 +255,26 @@ export const Find = Extension.create({
         }
       })
     ]
+  }
+})
+
+// --- Footnote: an inline, atomic note marker ---------------------------------
+// Numbering is visual (CSS counters) and computed at export time, so notes
+// renumber themselves automatically when moved or deleted.
+export const Footnote = Node.create({
+  name: 'footnote',
+  group: 'inline',
+  inline: true,
+  atom: true,
+  addAttributes() {
+    return {
+      text: { default: '' }
+    }
+  },
+  parseHTML() {
+    return [{ tag: 'sup[data-footnote]' }]
+  },
+  renderHTML({ node }) {
+    return ['sup', { 'data-footnote': node.attrs.text as string, class: 'fn-ref', title: node.attrs.text as string }]
   }
 })

@@ -4,6 +4,7 @@ import { join } from 'path'
 import {
   AlignmentType,
   Document,
+  FootnoteReferenceRun,
   Header,
   HeadingLevel,
   PageNumber,
@@ -12,7 +13,8 @@ import {
   TextRun
 } from 'docx'
 import { openPaper } from './papers'
-import { docToParagraphs, docToPlainText } from '@shared/doc'
+import { docToPlainText, docToParagraphsWithNotes } from '@shared/doc'
+import type { ParaSegment } from '@shared/doc'
 import { formatCitation, referenceSegments } from '@shared/citations'
 import {
   citationStyleFor,
@@ -115,9 +117,20 @@ async function buildDocx(paper: Paper): Promise<Buffer> {
     children.push(new Paragraph({ text: paper.meta.title, heading: HeadingLevel.TITLE }))
   }
 
-  const paras = docToParagraphs(paper.content.doc)
-  if (paras.length === 0) children.push(new Paragraph({ children: [new TextRun('')] }))
-  else for (const p of paras) children.push(bodyPara(p, { indent: true }))
+  const { paragraphs: segParas, notes } = docToParagraphsWithNotes(paper.content.doc)
+  if (segParas.length === 0) children.push(new Paragraph({ children: [new TextRun('')] }))
+  else
+    for (const segs of segParas) {
+      children.push(
+        new Paragraph({
+          spacing: { line: DOUBLE, after: 0 },
+          indent: { firstLine: INDENT },
+          children: segs.map((seg: ParaSegment) =>
+            'footnote' in seg ? new FootnoteReferenceRun(seg.footnote) : new TextRun(seg.text)
+          )
+        })
+      )
+    }
 
   if (paper.content.sources.length) {
     const style = citationStyleFor(fmt)
@@ -144,10 +157,16 @@ async function buildDocx(paper: Paper): Promise<Buffer> {
     headers = { default: new Header({ children: [new Paragraph({ alignment: AlignmentType.RIGHT, children: runs })] }) }
   }
 
+  const footnotes: Record<number, { children: Paragraph[] }> = {}
+  notes.forEach((text, i) => {
+    footnotes[i + 1] = { children: [new Paragraph({ children: [new TextRun(text)] })] }
+  })
+
   const doc = new Document({
     creator: 'Writability',
     title: paper.meta.title,
     styles: { default: { document: { run: { font: 'Times New Roman', size: 24 } } } },
+    footnotes: notes.length ? footnotes : undefined,
     sections: [{ headers, children }]
   })
   return (await Packer.toBuffer(doc)) as Buffer
@@ -181,9 +200,20 @@ function renderHtml(paper: Paper): string {
   else if (spec.titleOnBody) body += `<h1 class="doc-title bold">${title}</h1>`
   else if (!spec.titlePage) body += `<h1 class="doc-title">${title}</h1>`
 
-  body += docToParagraphs(paper.content.doc)
-    .map((p) => `<p>${escapeHtml(p)}</p>`)
+  const { paragraphs: pdfParas, notes: pdfNotes } = docToParagraphsWithNotes(paper.content.doc)
+  body += pdfParas
+    .map(
+      (segs) =>
+        `<p>${segs
+          .map((seg) => ('footnote' in seg ? `<sup>${seg.footnote}</sup>` : escapeHtml(seg.text)))
+          .join('')}</p>`
+    )
     .join('\n')
+  if (pdfNotes.length) {
+    body +=
+      `<h2>Notes</h2>` +
+      pdfNotes.map((n, i) => `<p class="cite">${i + 1}. ${escapeHtml(n)}</p>`).join('\n')
+  }
 
   if (paper.content.sources.length) {
     const style = citationStyleFor(fmt)
@@ -254,7 +284,20 @@ function buildTxt(paper: Paper): string {
   const head = spec.mlaHeaderBlock ? mlaHeadingLines(heading) : spec.titlePage ? titlePageLines(heading) : []
   if (head.length) lines.push(...head, '')
   lines.push(paper.meta.title, '')
-  lines.push(docToPlainText(paper.content.doc))
+  const { paragraphs: txtParas, notes: txtNotes } = docToParagraphsWithNotes(paper.content.doc)
+  if (txtParas.length) {
+    lines.push(
+      txtParas
+        .map((segs) => segs.map((seg) => ('footnote' in seg ? `[${seg.footnote}]` : seg.text)).join(''))
+        .join('\n\n')
+    )
+  } else {
+    lines.push(docToPlainText(paper.content.doc))
+  }
+  if (txtNotes.length) {
+    lines.push('', 'Notes')
+    txtNotes.forEach((n, i) => lines.push(`[${i + 1}] ${n}`))
+  }
   if (paper.content.sources.length) {
     const style = citationStyleFor(fmt)
     lines.push('', spec.referenceLabel)

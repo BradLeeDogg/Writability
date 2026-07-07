@@ -348,6 +348,14 @@ const PROBE = `(async () => {
   await sleep(80);
   if (q('[data-testid="find-bar"]')) throw new Error('find bar did not close');
 
+  // Footnotes: add one from the format bar; a numbered marker appears.
+  (await waitFor('[data-testid="add-footnote"]', 'footnote button')).click();
+  const fnInput = await waitFor('[data-testid="footnote-input"]', 'footnote input');
+  setValue(fnInput, 'See the appendix.');
+  fnInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+  await sleep(150);
+  if (!document.querySelector('sup.fn-ref')) throw new Error('footnote marker did not appear');
+
   // Quick capture: Ctrl+J banks a thought to Brain dump without leaving the page.
   window.dispatchEvent(new KeyboardEvent('keydown', { key: 'j', ctrlKey: true, bubbles: true }));
   const cap = await waitFor('[data-testid="capture-input"]', 'quick capture input');

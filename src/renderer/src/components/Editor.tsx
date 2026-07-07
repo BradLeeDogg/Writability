@@ -8,7 +8,7 @@ import { useStore } from '../store/useStore'
 import { ThesisPin } from './ThesisPin'
 import { SpellPopover } from './SpellPopover'
 import type { SpellTarget } from './SpellPopover'
-import { Spotlight, spotlightKey, Glossary, glossaryKey, Spellcheck, spellcheckKey, Find, findKey, findMatches } from '../lib/tiptapAddons'
+import { Spotlight, spotlightKey, Glossary, glossaryKey, Spellcheck, spellcheckKey, Find, findKey, findMatches, Footnote } from '../lib/tiptapAddons'
 import { ensureSpell, setCustomWords } from '../lib/spell'
 import { outlineToDocContent } from '@shared/scaffold'
 import { TRANSITIONS } from '@shared/transitions'
@@ -46,7 +46,8 @@ export function Editor(): JSX.Element {
       Spotlight,
       Glossary,
       Spellcheck,
-      Find
+      Find,
+      Footnote
     ],
     content: current.content.doc as never,
     autofocus: 'end',
@@ -115,6 +116,12 @@ export function Editor(): JSX.Element {
   const [spell, setSpell] = useState<SpellTarget | null>(null)
   const onProseClick = (e: React.MouseEvent): void => {
     if (!editor) return
+    const fn = (e.target as HTMLElement).closest('sup.fn-ref') as HTMLElement | null
+    if (fn) {
+      const pos = editor.view.posAtDOM(fn, 0) - 1
+      openFootnote(pos, fn.getAttribute('data-footnote') ?? '')
+      return
+    }
     const el = (e.target as HTMLElement).closest('.pm-misspelled, .pm-confusable') as HTMLElement | null
     if (!el) {
       setSpell(null)
@@ -195,6 +202,37 @@ export function Editor(): JSX.Element {
     setCaptureText('')
     setCaptureOpen(false)
     editor?.commands.focus()
+  }
+
+  // Footnotes: an inline bar to write the note; clicking a marker re-opens it.
+  const [fnOpen, setFnOpen] = useState(false)
+  const [fnText, setFnText] = useState('')
+  const [fnEditPos, setFnEditPos] = useState<number | null>(null)
+  const fnRef = useRef<HTMLInputElement>(null)
+  const openFootnote = (pos: number | null, existing: string): void => {
+    setFnEditPos(pos)
+    setFnText(existing)
+    setFnOpen(true)
+    setTimeout(() => fnRef.current?.focus(), 0)
+  }
+  const saveFootnote = (): void => {
+    if (!editor) return
+    const text = fnText.trim()
+    if (fnEditPos !== null) {
+      // Editing an existing marker: empty text removes it.
+      const chain = editor.chain().focus()
+      if (text) chain.command(({ tr }) => {
+        tr.setNodeMarkup(fnEditPos, undefined, { text })
+        return true
+      })
+      else chain.deleteRange({ from: fnEditPos, to: fnEditPos + 1 })
+      chain.run()
+    } else if (text) {
+      editor.chain().focus().insertContent({ type: 'footnote', attrs: { text } }).run()
+    }
+    setFnOpen(false)
+    setFnText('')
+    setFnEditPos(null)
   }
 
   // Find & replace: Ctrl/Cmd+F opens a small inline bar; Esc closes it.
@@ -281,7 +319,7 @@ export function Editor(): JSX.Element {
   return (
     <section className="editor-wrap" data-testid="editor" aria-label="Writing area">
       <ThesisPin />
-      <FormatBar editor={editor} onInsertOutline={insertOutline} />
+      <FormatBar editor={editor} onInsertOutline={insertOutline} onFootnote={() => openFootnote(null, '')} />
       {showReentry && (
         <div className="reentry-card" data-testid="reentry-card">
           <div className="reentry-body">
@@ -298,6 +336,27 @@ export function Editor(): JSX.Element {
           <button className="ghost" data-testid="reentry-dismiss" onClick={dismissReentry}>
             Got it
           </button>
+        </div>
+      )}
+      {fnOpen && (
+        <div className="capture-bar" data-testid="footnote-bar">
+          <input
+            ref={fnRef}
+            data-testid="footnote-input"
+            value={fnText}
+            placeholder={fnEditPos !== null ? 'Edit the note — empty removes it…' : 'Footnote text…'}
+            aria-label="Footnote text"
+            onChange={(e) => setFnText(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') saveFootnote()
+              if (e.key === 'Escape') {
+                setFnOpen(false)
+                setFnText('')
+                setFnEditPos(null)
+                editor?.commands.focus()
+              }
+            }}
+          />
         </div>
       )}
       {captureOpen && (
@@ -420,9 +479,10 @@ export function Editor(): JSX.Element {
 interface FormatBarProps {
   editor: TiptapEditor | null
   onInsertOutline: () => void
+  onFootnote: () => void
 }
 
-function FormatBar({ editor, onInsertOutline }: FormatBarProps): JSX.Element | null {
+function FormatBar({ editor, onInsertOutline, onFootnote }: FormatBarProps): JSX.Element | null {
   if (!editor) return null
 
   const insertPhrase = (phrase: string): void => {
@@ -498,6 +558,17 @@ function FormatBar({ editor, onInsertOutline }: FormatBarProps): JSX.Element | n
           ))}
         </div>
       </details>
+
+      <button
+        type="button"
+        className="fmt"
+        data-testid="add-footnote"
+        title="Add a footnote at the cursor"
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={onFootnote}
+      >
+        ¹ Footnote
+      </button>
 
       <button
         type="button"

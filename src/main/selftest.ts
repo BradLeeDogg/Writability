@@ -18,7 +18,7 @@ import { TRANSITIONS } from '@shared/transitions'
 import { GLOSSARY, glossaryMap } from '@shared/glossary'
 import { summarizeSource } from '@shared/reading'
 import { formatCitation, referenceSegments } from '@shared/citations'
-import { docToPlainText, splitSentences, sentenceIndexAt, splitWords, wordIndexAt, replaceWordInDoc } from '@shared/doc'
+import { docToPlainText, splitSentences, sentenceIndexAt, splitWords, wordIndexAt, replaceWordInDoc, docToParagraphsWithNotes } from '@shared/doc'
 import { estimatePages, pageStats, WORDS_PER_PAGE, formatSpec, lastNameOf, mlaHeadingLines } from '@shared/format'
 import { coachContext } from '@shared/coach'
 import { pickVoice, sortVoices } from '@shared/voices'
@@ -653,6 +653,44 @@ export async function runSelftest(): Promise<void> {
       assert.ok(conv.kept.includes('Bold') && conv.kept.includes('Italics'), 'fidelity report lists what survived')
       pass('docx import (golden round-trip)')
     }
+
+    // --- footnotes: segmentation + real Word footnotes -------------------
+    const fnDoc = {
+      type: 'doc',
+      content: [
+        {
+          type: 'paragraph',
+          content: [
+            { type: 'text', text: 'A claim' },
+            { type: 'footnote', attrs: { text: 'See Smith, p. 12.' } },
+            { type: 'text', text: ' and more.' }
+          ]
+        },
+        {
+          type: 'paragraph',
+          content: [
+            { type: 'text', text: 'Second point' },
+            { type: 'footnote', attrs: { text: 'Archive citation.' } }
+          ]
+        }
+      ]
+    }
+    const fnFlat = docToParagraphsWithNotes(fnDoc)
+    assert.equal(fnFlat.notes.length, 2, 'both footnotes collected in order')
+    assert.equal(fnFlat.notes[0], 'See Smith, p. 12.')
+    assert.ok(
+      fnFlat.paragraphs[0].some((seg) => 'footnote' in seg && seg.footnote === 1),
+      'marker 1 sits in the first paragraph'
+    )
+    assert.ok(!docToPlainText(fnDoc).includes('Smith'), 'plain text (read-aloud) skips note bodies')
+    const fnPaper = createPaper({ title: 'Footnote paper', essayType: 'research' })
+    fnPaper.content.doc = fnDoc
+    savePaper({ meta: { ...fnPaper.meta, format: 'chicago' }, content: fnPaper.content })
+    const fnDocx = await renderExport(openPaper(fnPaper.meta.id)!, 'docx')
+    assert.ok(fnDocx.length > 100, 'docx with footnotes renders')
+    const fnTxt = (await renderExport(openPaper(fnPaper.meta.id)!, 'txt')).toString('utf8')
+    assert.ok(fnTxt.includes('[1]') && fnTxt.includes('[1] See Smith, p. 12.'), 'txt export numbers the notes')
+    pass('footnotes (segments + export)')
 
     // --- tone pins: overdue copy stays factual and kind; AI contract ----
     assert.ok(overdue && /Pick one step and start there/.test(overdue.message), 'overdue copy offers a next step, not guilt')

@@ -1956,3 +1956,17 @@ input[type='range'] {
 .settings-group[open] > summary {
   margin-bottom: 0.5rem;
 }
+
+/* Footnote markers: numbered automatically with CSS counters */
+.prose {
+  counter-reset: fn;
+}
+.prose sup.fn-ref {
+  counter-increment: fn;
+  cursor: pointer;
+  color: var(--accent);
+  font-weight: 600;
+}
+.prose sup.fn-ref::after {
+  content: counter(fn);
+}
