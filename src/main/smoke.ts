@@ -348,6 +348,23 @@ const PROBE = `(async () => {
   await sleep(80);
   if (q('[data-testid="find-bar"]')) throw new Error('find bar did not close');
 
+  // Command palette: Ctrl+K opens it; running a command switches tabs.
+  window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true, bubbles: true }));
+  const pal = await waitFor('[data-testid="palette-input"]', 'command palette input');
+  setValue(pal, 'spelling');
+  pal.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+  await waitFor('[data-testid="spelling-panel"]', 'palette command opened the Spelling tab');
+  (await waitFor('[data-testid="tab-assignment"]', 'back to assignment tab')).click();
+  await sleep(80);
+
+  // Insert-citation popover: Ctrl+Shift+C opens; with no sources it says so.
+  window.dispatchEvent(new KeyboardEvent('keydown', { key: 'c', ctrlKey: true, shiftKey: true, bubbles: true }));
+  await waitFor('[data-testid="cite-popover"]', 'cite popover');
+  await waitFor('[data-testid="cite-empty"]', 'cite popover empty state');
+  q('[data-testid="cite-input"]').dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  await sleep(80);
+  if (q('[data-testid="cite-popover"]')) throw new Error('cite popover did not close');
+
   // Footnotes: add one from the format bar; a numbered marker appears.
   (await waitFor('[data-testid="add-footnote"]', 'footnote button')).click();
   const fnInput = await waitFor('[data-testid="footnote-input"]', 'footnote input');

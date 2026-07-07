@@ -1,12 +1,12 @@
 # Writability — Upgrade Backlog (v2, cognitive-accessibility audit)
 
-> **Status: all 18 tickets implemented** on `claude/gracious-wozniak-nm9540`
-> (Waves 1–3). Deviations from the original spec, chosen to keep scope honest:
-> T2 shipped without a command palette (find bar + shortcuts only); T6 jumps to
-> the document without a per-position tint; T9 is panel-driven (no Ctrl+Shift+C
-> popover); T10 uses Space/←/→ without roving word focus; T13 shipped the
-> prompts toggle + lean creation but not the ≥3-papers nudge; T14 snapshots on
-> open (not the 20-minute timer). Each remainder is a small follow-up.
+> **Status: all 18 tickets implemented in full** on
+> `claude/gracious-wozniak-nm9540`. The six deviations noted in earlier
+> revisions were closed in the follow-up commit: Ctrl+K command palette (T2),
+> re-entry "Take me there" cursor jump (T6), Ctrl+Shift+C insert-citation
+> popover (T9), Shift+←/→ + Enter word-level keyboard resume in read-aloud
+> (T10), the ≥3-papers start-leaner nudge with a permanent "don't ask again"
+> (T13), and a 20-minute snapshot interval alongside snapshot-on-open (T14).
 
 Implements `REVIEW_FINDINGS.md` (v2). Every ticket: problem → change → acceptance → effort (S ≤ ½ day, M ≤ 2 days, L multi-day) → personas → ethos check (*reduces cognitive load and increases the student's own capability, without noise, pressure, or dependence*). Standing gate for all tickets: typecheck + build + selftest + smoke green, with a new selftest/smoke assertion wherever the change has pure logic or visible UI.
 

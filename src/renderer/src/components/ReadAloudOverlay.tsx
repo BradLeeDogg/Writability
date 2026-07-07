@@ -96,8 +96,28 @@ export function ReadAloudOverlay(): JSX.Element | null {
         e.preventDefault()
         togglePause()
       }
-      if (e.key === 'ArrowRight') jumpSentence(1)
-      if (e.key === 'ArrowLeft') jumpSentence(-1)
+      if (e.key === 'ArrowRight' && !e.shiftKey) jumpSentence(1)
+      if (e.key === 'ArrowLeft' && !e.shiftKey) jumpSentence(-1)
+      // Shift+arrows move the highlight one word (silently); Enter reads from it.
+      if (e.key === 'ArrowRight' && e.shiftKey) {
+        e.preventDefault()
+        stopSpeaking()
+        setPaused(true)
+        setActiveWord((w) => Math.min(w + 1, words.length - 1))
+      }
+      if (e.key === 'ArrowLeft' && e.shiftKey) {
+        e.preventDefault()
+        stopSpeaking()
+        setPaused(true)
+        setActiveWord((w) => Math.max(w - 1, 0))
+      }
+      if (e.key === 'Enter') {
+        const w = words[activeWord]
+        if (w) {
+          setPaused(false)
+          speakFrom(w.start)
+        }
+      }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
@@ -154,7 +174,7 @@ export function ReadAloudOverlay(): JSX.Element | null {
       </div>
       {!ttsSupported() && (
         <p className="reader-note muted">
-          This device has no built-in voice, so there’s no audio — but you can still read along. Space pauses; ← and → move a sentence.
+          This device has no built-in voice, so there’s no audio — but you can still read along. Space pauses; ←/→ move a sentence; Shift+←/→ move a word; Enter reads from the highlighted word.
         </p>
       )}
     </div>

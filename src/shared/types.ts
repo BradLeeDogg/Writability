@@ -60,6 +60,8 @@ export interface PaperMeta {
   stage?: PaperStage
   /** Lean mode: hide the writing prompts once the student knows the steps. */
   hidePrompts?: boolean
+  /** Last caret position in the document, for "Take me there" on re-entry. */
+  lastCursor?: number
 }
 
 /** One concrete, checkable requirement pulled from (or added to) the prompt. */
@@ -189,6 +191,10 @@ export interface AppSettings {
   aiModel: string
   /** Id of the last paper opened, so we can restore it on launch. */
   lastPaperId?: string
+  /** How many papers of each type the student has created (for the lean nudge). */
+  typeCounts?: Record<string, number>
+  /** True once the student has said "no thanks" to the start-leaner nudge. */
+  leanNudgeDismissed?: boolean
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {

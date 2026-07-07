@@ -17,6 +17,10 @@ export function Library(): JSX.Element {
   const refreshTrash = useStore((s) => s.refreshTrash)
   const restoreFromTrash = useStore((s) => s.restoreFromTrash)
   const importPaper = useStore((s) => s.importPaper)
+  const typeCountsRaw = useStore((s) => s.settings.typeCounts)
+  const typeCounts = typeCountsRaw ?? {}
+  const leanNudgeDismissed = useStore((s) => s.settings.leanNudgeDismissed ?? false)
+  const updateSettings = useStore((s) => s.updateSettings)
 
   useEffect(() => {
     void refreshTrash()
@@ -117,6 +121,22 @@ export function Library(): JSX.Element {
             />
             <span>Start lean — same steps, without the writing prompts</span>
           </label>
+          {!lean && !leanNudgeDismissed && (typeCounts[essayType] ?? 0) >= 3 && (
+            <p className="lean-nudge" data-testid="lean-nudge">
+              You’ve written {typeCounts[essayType]} of these — want to start leaner this time?{' '}
+              <button className="link-btn" data-testid="lean-nudge-yes" onClick={() => setLean(true)}>
+                Start lean
+              </button>{' '}
+              ·{' '}
+              <button
+                className="link-btn"
+                data-testid="lean-nudge-no"
+                onClick={() => updateSettings({ leanNudgeDismissed: true })}
+              >
+                No thanks — don’t ask again
+              </button>
+            </p>
+          )}
 
           <div className="row">
             <button className="primary" data-testid="create-paper" onClick={() => void onCreate()}>

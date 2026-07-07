@@ -12,7 +12,8 @@ import { Spotlight, spotlightKey, Glossary, glossaryKey, Spellcheck, spellcheckK
 import { ensureSpell, setCustomWords } from '../lib/spell'
 import { outlineToDocContent } from '@shared/scaffold'
 import { TRANSITIONS } from '@shared/transitions'
-import { pageStats } from '@shared/format'
+import { pageStats, citationStyleFor } from '@shared/format'
+import { formatCitation } from '@shared/citations'
 import { nextAction } from '@shared/planner'
 
 // Papers whose re-entry card was dismissed this session.
@@ -181,6 +182,13 @@ export function Editor(): JSX.Element {
     reentryDismissed.add(current.meta.id)
     setShowReentry(false)
   }
+  const takeMeThere = (): void => {
+    if (!editor) return
+    const size = editor.state.doc.content.size
+    const pos = Math.max(1, Math.min(current.meta.lastCursor ?? size, size))
+    editor.chain().focus().setTextSelection(pos).scrollIntoView().run()
+    dismissReentry()
+  }
 
   // Quick capture: Ctrl/Cmd+J banks a fleeting thought to Brain dump without
   // leaving the page or losing the cursor.
@@ -233,6 +241,35 @@ export function Editor(): JSX.Element {
     setFnOpen(false)
     setFnText('')
     setFnEditPos(null)
+  }
+
+  // Insert-citation popover (Ctrl/Cmd+Shift+C): pick a source, Enter drops the
+  // in-text citation at the cursor — no tab switch, no retyping.
+  const [citeOpen, setCiteOpen] = useState(false)
+  const [citeQuery, setCiteQuery] = useState('')
+  const [citeActive, setCiteActive] = useState(0)
+  const citeRef = useRef<HTMLInputElement>(null)
+  const citeStyle = citationStyleFor(current.meta.format ?? 'none')
+  const citeMatches = useMemo(() => {
+    const q = citeQuery.trim().toLowerCase()
+    const list = current.content.sources
+    if (!q) return list
+    return list.filter((src) =>
+      [src.title, src.authors.join(' '), src.year ?? ''].join(' ').toLowerCase().includes(q)
+    )
+  }, [current.content.sources, citeQuery])
+  const openCite = (): void => {
+    setCiteOpen(true)
+    setCiteQuery('')
+    setCiteActive(0)
+    setTimeout(() => citeRef.current?.focus(), 0)
+  }
+  const insertCite = (idx: number): void => {
+    const src = citeMatches[idx]
+    if (src && editor) {
+      editor.chain().focus().insertContent(formatCitation(src, citeStyle).inText + ' ').run()
+    }
+    setCiteOpen(false)
   }
 
   // Find & replace: Ctrl/Cmd+F opens a small inline bar; Esc closes it.
@@ -299,6 +336,10 @@ export function Editor(): JSX.Element {
         e.preventDefault()
         openCapture()
       }
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'c') {
+        e.preventDefault()
+        openCite()
+      }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
@@ -333,9 +374,63 @@ export function Editor(): JSX.Element {
               <p className="reentry-line muted">Your note to yourself: “{scratchNote}”</p>
             )}
           </div>
-          <button className="ghost" data-testid="reentry-dismiss" onClick={dismissReentry}>
-            Got it
-          </button>
+          <div className="reentry-actions">
+            <button className="primary" data-testid="reentry-jump" onClick={takeMeThere}>
+              Take me there
+            </button>
+            <button className="ghost" data-testid="reentry-dismiss" onClick={dismissReentry}>
+              Got it
+            </button>
+          </div>
+        </div>
+      )}
+      {citeOpen && (
+        <div className="capture-bar cite-bar" data-testid="cite-popover">
+          <input
+            ref={citeRef}
+            data-testid="cite-input"
+            value={citeQuery}
+            placeholder="Insert a citation — type an author, title, or year…"
+            aria-label="Find a source to cite"
+            onChange={(e) => {
+              setCiteQuery(e.target.value)
+              setCiteActive(0)
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') {
+                setCiteOpen(false)
+                editor?.commands.focus()
+              }
+              if (e.key === 'ArrowDown') {
+                e.preventDefault()
+                setCiteActive((a) => Math.min(a + 1, citeMatches.length - 1))
+              }
+              if (e.key === 'ArrowUp') {
+                e.preventDefault()
+                setCiteActive((a) => Math.max(a - 1, 0))
+              }
+              if (e.key === 'Enter') insertCite(citeActive)
+            }}
+          />
+          {citeMatches.length === 0 ? (
+            <span className="muted small" data-testid="cite-empty">
+              No sources yet — add them in the Citations tab.
+            </span>
+          ) : (
+            <div className="cite-options">
+              {citeMatches.slice(0, 6).map((src, i) => (
+                <button
+                  key={src.id}
+                  className={'chip' + (i === citeActive ? ' selected' : '')}
+                  data-testid="cite-option"
+                  onMouseEnter={() => setCiteActive(i)}
+                  onClick={() => insertCite(i)}
+                >
+                  {formatCitation(src, citeStyle).inText}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       )}
       {fnOpen && (

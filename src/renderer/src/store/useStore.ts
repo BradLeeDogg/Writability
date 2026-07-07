@@ -322,6 +322,9 @@ export const useStore = create<StoreState>()((set, get) => {
 
     async createPaper(input) {
       const paper = await window.api.createPaper(input)
+      const counts = { ...(get().settings.typeCounts ?? {}) }
+      counts[input.essayType] = (counts[input.essayType] ?? 0) + 1
+      get().updateSettings({ typeCounts: counts })
       set({ current: paper, view: 'editor', dirty: false, saveState: 'saved' })
       get().updateSettings({ lastPaperId: paper.meta.id })
       await get().refreshPapers()
@@ -625,8 +628,13 @@ export const useStore = create<StoreState>()((set, get) => {
         saveTimer = null
       }
       set({ saveState: 'saving' })
+      // Remember the caret so re-entry can offer "Take me there".
+      const ed = get().editorInstance
+      const lastCursor = ed && !ed.isDestroyed ? ed.state.selection.head : cur.meta.lastCursor
+      const meta = { ...cur.meta, lastCursor }
+      set({ current: { ...cur, meta } })
       try {
-        const res = await window.api.savePaper({ meta: cur.meta, content: cur.content })
+        const res = await window.api.savePaper({ meta, content: cur.content })
         // Reflect the server timestamp without clobbering newer edits.
         set((state) => ({
           dirty: false,
