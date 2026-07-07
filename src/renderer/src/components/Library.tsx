@@ -16,6 +16,7 @@ export function Library(): JSX.Element {
   const trash = useStore((s) => s.trash)
   const refreshTrash = useStore((s) => s.refreshTrash)
   const restoreFromTrash = useStore((s) => s.restoreFromTrash)
+  const importPaper = useStore((s) => s.importPaper)
 
   useEffect(() => {
     void refreshTrash()
@@ -48,9 +49,14 @@ export function Library(): JSX.Element {
       </header>
 
       {!showNew ? (
-        <button className="primary big" data-testid="new-paper" onClick={() => setShowNew(true)}>
-          + Start a new paper
-        </button>
+        <div className="row wrap">
+          <button className="primary big" data-testid="new-paper" onClick={() => setShowNew(true)}>
+            + Start a new paper
+          </button>
+          <button className="ghost" data-testid="import-docx" onClick={() => void importPaper()}>
+            Import a Word document…
+          </button>
+        </div>
       ) : (
         <section className="card new-paper" aria-label="Create a new paper">
           <h2>New paper</h2>

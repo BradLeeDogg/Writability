@@ -105,6 +105,16 @@ export interface WritabilityApi {
   takeSnapshot(id: string): Promise<{ file: string; at: string; words: number } | null>
   listSnapshots(id: string): Promise<{ file: string; at: string; words: number }[]>
   restoreSnapshot(id: string, file: string): Promise<{ ok: boolean }>
+  /** Import a .docx as a new paper's content, with an honest fidelity report. */
+  importDocx(): Promise<{
+    ok: boolean
+    canceled?: boolean
+    error?: string
+    title?: string
+    html?: string
+    kept?: string[]
+    dropped?: string[]
+  }>
 
   // Settings --------------------------------------------------------------
   getSettings(): Promise<AppSettings>
@@ -135,6 +145,8 @@ export interface WritabilityApi {
   onFlushRequest(cb: () => void): void
   /** Renderer tells main the flush finished and the window may close. */
   flushDone(): void
+  /** Fires once when a background update has downloaded (Windows builds). */
+  onUpdateReady(cb: (version: string) => void): void
 
   // Misc ------------------------------------------------------------------
   getAppInfo(): Promise<AppInfo>

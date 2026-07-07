@@ -1733,6 +1733,7 @@ input[type='range'] {
   margin: 0 0 0.9rem;
   color: var(--text-muted);
   line-height: 1.5;
+  white-space: pre-line;
 }
 .notice-actions {
   display: flex;

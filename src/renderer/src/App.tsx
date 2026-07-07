@@ -29,6 +29,11 @@ export default function App(): JSX.Element {
   // Quit-safe saving: main intercepts the window close and waits for this
   // flush to finish (see src/main/index.ts). beforeunload stays as a backup.
   useEffect(() => {
+    window.api.onUpdateReady((version) => {
+      useStore
+        .getState()
+        .showToast(`An update (${version}) is ready. It installs itself the next time you close the app.`)
+    })
     window.api.onFlushRequest(() => {
       void save().finally(() => window.api.flushDone())
     })

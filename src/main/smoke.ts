@@ -46,6 +46,7 @@ const PROBE = `(async () => {
 
   // Library view (no papers yet in the throwaway data dir).
   await waitFor('[data-testid="library"]', 'library view');
+  await waitFor('[data-testid="import-docx"]', 'import docx button');
   (await waitFor('[data-testid="new-paper"]', 'new paper button')).click();
 
   // New-paper dialog: the lean option exists (scaffolding fade).

@@ -15,6 +15,7 @@ const api: WritabilityApi = {
   takeSnapshot: (id) => ipcRenderer.invoke('snapshots:take', id),
   listSnapshots: (id) => ipcRenderer.invoke('snapshots:list', id),
   restoreSnapshot: (id, file) => ipcRenderer.invoke('snapshots:restore', id, file),
+  importDocx: () => ipcRenderer.invoke('papers:import-docx'),
 
   getSettings: () => ipcRenderer.invoke('settings:get'),
   saveSettings: (settings) => ipcRenderer.invoke('settings:save', settings),
@@ -33,6 +34,9 @@ const api: WritabilityApi = {
     ipcRenderer.on('app:flush', () => cb())
   },
   flushDone: () => ipcRenderer.send('app:flushed'),
+  onUpdateReady: (cb) => {
+    ipcRenderer.on('app:update-ready', (_e, version: string) => cb(version))
+  },
 
   getAppInfo: () => ipcRenderer.invoke('app:info')
 }

@@ -40,9 +40,11 @@ export function Notices(): JSX.Element | null {
             <h3>{confirmBox.title}</h3>
             <p>{confirmBox.body}</p>
             <div className="notice-actions">
-              <button className="ghost" data-testid="confirm-no" onClick={() => resolveConfirm(false)}>
-                Cancel
-              </button>
+              {!confirmBox.info && (
+                <button className="ghost" data-testid="confirm-no" onClick={() => resolveConfirm(false)}>
+                  Cancel
+                </button>
+              )}
               <button
                 ref={confirmRef}
                 className={confirmBox.danger ? 'danger-btn' : 'primary'}

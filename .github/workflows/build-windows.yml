@@ -44,6 +44,7 @@ jobs:
           path: |
             release/*.exe
             release/*.zip
+            release/latest.yml
           if-no-files-found: error
 
       # Publish to a rolling "win-latest" release for stable download links.
@@ -64,5 +65,6 @@ jobs:
           files: |
             release/*.exe
             release/*.zip
+            release/latest.yml
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

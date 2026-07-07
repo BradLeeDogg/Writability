@@ -63,8 +63,8 @@ interface StoreState {
   showToast: (message: string, actions?: { label: string; run: () => void }[], ttlMs?: number) => void
   dismissToast: () => void
   /** One calm in-app question dialog (replaces window.confirm). */
-  confirmBox: { title: string; body: string; confirmLabel: string; danger?: boolean } | null
-  askConfirm: (opts: { title: string; body: string; confirmLabel: string; danger?: boolean }) => Promise<boolean>
+  confirmBox: { title: string; body: string; confirmLabel: string; danger?: boolean; info?: boolean } | null
+  askConfirm: (opts: { title: string; body: string; confirmLabel: string; danger?: boolean; info?: boolean }) => Promise<boolean>
   resolveConfirm: (answer: boolean) => void
   /** Consecutive autosave failures (drives the rescue affordance). */
   saveFails: number
@@ -74,6 +74,8 @@ interface StoreState {
   trash: PaperSummary[]
   refreshTrash: () => Promise<void>
   restoreFromTrash: (id: string) => Promise<void>
+  /** Import a Word document as a new paper; shows an honest fidelity report. */
+  importPaper: () => Promise<void>
 
   // papers
   createPaper: (input: { title: string; essayType: EssayType; format?: PaperFormat; lean?: boolean }) => Promise<void>
@@ -276,6 +278,37 @@ export const useStore = create<StoreState>()((set, get) => {
 
     async refreshTrash() {
       set({ trash: await window.api.listTrash() })
+    },
+
+    async importPaper() {
+      const res = await window.api.importDocx()
+      if (!res.ok) {
+        if (!res.canceled) get().showToast('The import did not work: ' + (res.error ?? 'unknown error'))
+        return
+      }
+      await get().createPaper({ title: res.title || 'Imported paper', essayType: 'research', format: 'mla' })
+      // Wait for the editor to mount, then load the imported content into it.
+      const html = res.html ?? ''
+      const tryLoad = (attempt: number): void => {
+        const ed = get().editorInstance
+        if (ed && !ed.isDestroyed) {
+          ed.commands.setContent(html, true)
+        } else if (attempt < 40) {
+          setTimeout(() => tryLoad(attempt + 1), 100)
+        }
+      }
+      tryLoad(0)
+      const kept = (res.kept ?? []).join(', ')
+      const dropped = res.dropped ?? []
+      void get().askConfirm({
+        title: 'Imported — here is what survived',
+        body:
+          'Kept: ' + (kept || 'plain text') + '.\n' +
+          (dropped.length ? 'Not kept: ' + dropped.join('; ') + '.' : 'Nothing was lost.') +
+          '\nCheck the paper against your original before you rely on it.',
+        confirmLabel: 'OK',
+        info: true
+      })
     },
 
     async restoreFromTrash(id) {

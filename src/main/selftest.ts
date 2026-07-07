@@ -9,6 +9,7 @@ import { applyBundle, buildBundle } from './services/backup'
 import { runAiTask } from './services/ai'
 import { dataDir, settingsPath } from './services/paths'
 import { listSnapshots, restoreSnapshot, snapshotPaper } from './services/snapshots'
+import { convertDocxBuffer } from './services/import'
 import { buildPrompt, isValidModel, splitIntoItems, INTEGRITY_STATEMENT } from '@shared/ai'
 import { analyzeClarity, suggestSentenceSplit } from '@shared/clarity'
 import { decodeAssignment, needsExpectationsBridge, UNSTATED_EXPECTATIONS } from '@shared/assignment'
@@ -621,6 +622,37 @@ export async function runSelftest(): Promise<void> {
     for (let i = 0; i < 25; i++) snapshotPaper(snapPaper.meta.id)
     assert.ok(listSnapshots(snapPaper.meta.id).length <= 20, 'old snapshots are pruned to the newest 20')
     pass('snapshots (history + restore + prune)')
+
+    // --- docx import: golden round-trip through mammoth ------------------
+    {
+      const { Document, HeadingLevel, Packer, Paragraph, TextRun } = await import('docx')
+      const golden = new Document({
+        sections: [
+          {
+            children: [
+              new Paragraph({ text: 'Imported Heading', heading: HeadingLevel.HEADING_1 }),
+              new Paragraph({
+                children: [
+                  new TextRun('Plain, '),
+                  new TextRun({ text: 'bold', bold: true }),
+                  new TextRun(' and '),
+                  new TextRun({ text: 'italic', italics: true }),
+                  new TextRun('.')
+                ]
+              })
+            ]
+          }
+        ]
+      })
+      const buf = (await Packer.toBuffer(golden)) as Buffer
+      const conv = await convertDocxBuffer(buf)
+      assert.ok(/Imported Heading/.test(conv.html), 'import keeps heading text')
+      assert.ok(/<h1/.test(conv.html), 'import keeps heading structure')
+      assert.ok(/<strong>bold<\/strong>/.test(conv.html), 'import keeps bold')
+      assert.ok(/<em>italic<\/em>/.test(conv.html), 'import keeps italics')
+      assert.ok(conv.kept.includes('Bold') && conv.kept.includes('Italics'), 'fidelity report lists what survived')
+      pass('docx import (golden round-trip)')
+    }
 
     // --- tone pins: overdue copy stays factual and kind; AI contract ----
     assert.ok(overdue && /Pick one step and start there/.test(overdue.message), 'overdue copy offers a next step, not guilt')

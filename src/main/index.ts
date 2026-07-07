@@ -1,4 +1,5 @@
 import { app, BrowserWindow, ipcMain, shell } from 'electron'
+import { autoUpdater } from 'electron-updater'
 import { join } from 'path'
 import { tmpdir } from 'os'
 import { registerIpc } from './ipc'
@@ -90,6 +91,29 @@ app.whenReady().then(async () => {
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })
+
+  // Quiet auto-update (Windows installer builds only). Downloads in the
+  // background from the rolling win-latest release and installs on quit —
+  // one calm toast, no nagging, nothing interrupts writing.
+  if (app.isPackaged && process.platform === 'win32') {
+    try {
+      autoUpdater.setFeedURL({
+        provider: 'generic',
+        url: 'https://github.com/BradLeeDogg/Writability/releases/download/win-latest'
+      })
+      autoUpdater.autoDownload = true
+      autoUpdater.autoInstallOnAppQuit = true
+      autoUpdater.on('update-downloaded', (info) => {
+        win.webContents.send('app:update-ready', info.version)
+      })
+      autoUpdater.on('error', () => {
+        // Updates are best-effort; never surface update noise to the student.
+      })
+      void autoUpdater.checkForUpdates()
+    } catch {
+      // No update feed available (e.g. offline) — carry on silently.
+    }
+  }
 })
 
 app.on('window-all-closed', () => {
