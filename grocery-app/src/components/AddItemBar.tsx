@@ -7,7 +7,6 @@ import {
   ScrollView,
   StyleSheet,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { CATEGORIES, guessCategory, type CategoryKey } from '../categories';
 import { colors, radius, spacing } from '../theme';
@@ -17,7 +16,6 @@ interface Props {
 }
 
 export function AddItemBar({ onAdd }: Props) {
-  const insets = useSafeAreaInsets();
   const [text, setText] = useState('');
   // Null means "follow the auto-guess"; a value means the user picked a chip.
   const [manualCategory, setManualCategory] = useState<CategoryKey | null>(null);
@@ -34,7 +32,7 @@ export function AddItemBar({ onAdd }: Props) {
   };
 
   return (
-    <View style={[styles.wrap, { paddingBottom: Math.max(insets.bottom, spacing.sm) }]}>
+    <View style={styles.wrap}>
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
@@ -94,6 +92,7 @@ const styles = StyleSheet.create({
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.border,
     paddingTop: spacing.sm,
+    paddingBottom: spacing.sm,
   },
   chips: {
     paddingHorizontal: spacing.md,

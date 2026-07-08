@@ -8,6 +8,10 @@ app loads.
 
 ## What it does
 
+Two tabs at the bottom: **🛒 List** and **🍳 Recipes**.
+
+**Shopping list**
+
 - **Add items** — type a name and tap **Add**. The app guesses the aisle
   (Produce, Dairy, Meat, Bakery, Frozen, Pantry, Drinks, Household), and you can
   tap a chip to change it.
@@ -18,6 +22,17 @@ app loads.
   with a line through it.
 - **Clear cart / Clear all** — tidy up when you're done.
 - **Saved automatically** — close the app and your list is still there.
+
+**Recipes**
+
+- **Suggestions** — the Recipes tab suggests meals; tap **🎲 Shuffle** for
+  different ideas, or search by name or ingredient.
+- **See the recipe** — tap a recipe for its ingredients (with amounts) and a
+  simple step-by-step method.
+- **Add ingredients to your list** — every ingredient is ticked by default;
+  untick anything you already have, then tap **Add … items to list**. They drop
+  straight onto your shopping list, grouped by aisle. All recipes are built in,
+  so this works with no internet.
 
 ---
 
