@@ -78,21 +78,55 @@ The app loads on your phone. Edit the code and it reloads instantly.
 
 ---
 
-## Turning it into a real installable app (later)
+## Installing it as a real app (no Expo Go)
 
-Expo Go is for development. To get a standalone app you can install directly
-(or publish to the stores), use **EAS Build** — it builds in the cloud, so you
-still don't need Android Studio or a Mac:
+Expo Go is only for development. To get a standalone app you install like any
+other, use **EAS Build** — it compiles in the cloud, so you still don't need
+Android Studio or a Mac. A **free Expo account** is required (sign up at
+<https://expo.dev>).
+
+One-time setup:
 
 ```bash
 npm install -g eas-cli
-eas login
-eas build --platform android      # produces an .apk / .aab
-eas build --platform ios          # produces an .ipa (needs an Apple Developer account)
+eas login          # or `eas register` to make a free account
+eas build:configure
 ```
 
-The Android build gives you an `.apk` you can download and install straight
-onto your phone. See <https://docs.expo.dev/build/setup/> for the full guide.
+### Android — install directly (free, easy)
+
+This produces an **`.apk`** file you can install straight onto the phone — no
+Play Store needed.
+
+```bash
+eas build --platform android --profile preview
+```
+
+When it finishes (a few minutes), EAS gives you a link with a QR code.
+
+1. On the Android phone, open that link and download the `.apk`.
+2. Tap it to install. Android will ask permission to "install unknown apps" the
+   first time — allow it, then tap install again.
+3. The Grocery List app is now on the home screen, running on its own.
+
+### iPhone — a bit more involved (Apple's rules)
+
+Apple doesn't allow installing a raw app file the way Android does. Your options:
+
+- **TestFlight (recommended):** requires an **Apple Developer account
+  ($99/year)**. Then `eas build --platform ios` builds it and
+  `eas submit --platform ios` uploads it; the user installs Apple's free
+  **TestFlight** app and opens your invite link. Each build lasts 90 days.
+- **App Store:** same $99/year account, plus Apple's review process — best if
+  you ever want to share it beyond family.
+- **Free, but clunky:** with a Mac and Xcode you can install it on your own
+  iPhone for 7 days at a time before it needs re-signing.
+
+Full guide: <https://docs.expo.dev/build/setup/>
+
+> Tip: before a real build, change `"com.example.grocerylist"` in `app.json`
+> (the `ios.bundleIdentifier` and `android.package`) to something of your own,
+> e.g. `com.yourname.grocerylist`.
 
 ---
 
@@ -100,19 +134,27 @@ onto your phone. See <https://docs.expo.dev/build/setup/> for the full guide.
 
 ```
 grocery-app/
-  App.tsx                 App shell: state, persistence, the grouped list
+  App.tsx                 App shell: state, persistence, tab switching
   index.ts                Entry point (registers App)
-  app.json                Expo configuration (name, icons, platforms)
+  app.json                Expo configuration (name, platforms, ids)
+  eas.json                Cloud build profiles (APK / store builds)
   src/
     categories.ts         Aisle definitions + "guess the aisle" logic
+    recipes.ts            Built-in recipe collection + suggest/search
     storage.ts            Load/save the list to the phone (AsyncStorage)
     theme.ts              Colors & spacing
     types.ts              The GroceryItem shape
+    screens/
+      ListScreen.tsx      The shopping list (header, aisles, add bar)
+      RecipesScreen.tsx   Suggestions, search, recipe browsing
     components/
       Header.tsx          Title, counts, clear buttons
       AddItemBar.tsx      Text input + aisle chips + Add button
       ItemRow.tsx         One item: checkbox, name, quantity, delete
       EmptyState.tsx      Friendly message when the list is empty
+      TabBar.tsx          Bottom List / Recipes tabs
+      RecipeCard.tsx      One recipe in the list
+      RecipeDetailModal.tsx  Ingredients + method + add-to-list
 ```
 
 ## Handy commands
