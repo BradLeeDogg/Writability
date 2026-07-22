@@ -6,16 +6,27 @@
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
+    "icon": "./assets/icon.png",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#2E7D32"
+    },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.example.grocerylist"
+      "bundleIdentifier": "com.williamnichols.grocerylist"
     },
     "android": {
-      "package": "com.example.grocerylist",
-      "edgeToEdgeEnabled": true
+      "package": "com.williamnichols.grocerylist",
+      "edgeToEdgeEnabled": true,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#2E7D32"
+      }
     },
     "web": {
-      "bundler": "metro"
+      "bundler": "metro",
+      "favicon": "./assets/favicon.png"
     }
   }
 }
