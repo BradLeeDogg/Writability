@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "Grocery List",
-    "slug": "grocery-list",
+    "slug": "grocery-list-app",
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
@@ -27,6 +27,11 @@
     "web": {
       "bundler": "metro",
       "favicon": "./assets/favicon.png"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "00c8d3a4-8666-4007-b40b-58c3fa3d2108"
+      }
     }
   }
 }
