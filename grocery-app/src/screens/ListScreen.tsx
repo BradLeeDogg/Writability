@@ -27,6 +27,9 @@ interface Section {
 interface Props {
   items: GroceryItem[];
   loaded: boolean;
+  isShared: boolean;
+  sharedCode?: string;
+  onShare: () => void;
   onAdd: (name: string, category: CategoryKey) => void;
   onToggle: (id: string) => void;
   onDelete: (id: string) => void;
@@ -38,6 +41,9 @@ interface Props {
 export function ListScreen({
   items,
   loaded,
+  isShared,
+  sharedCode,
+  onShare,
   onAdd,
   onToggle,
   onDelete,
@@ -79,6 +85,9 @@ export function ListScreen({
       <Header
         totalCount={items.length}
         checkedCount={checkedCount}
+        isShared={isShared}
+        sharedCode={sharedCode}
+        onShare={onShare}
         onClearChecked={onClearChecked}
         onClearAll={onClearAll}
       />

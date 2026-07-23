@@ -130,6 +130,49 @@ Full guide: <https://docs.expo.dev/build/setup/>
 
 ---
 
+## Turn on list sharing (cloud sync)
+
+Out of the box, each phone's list is **private and offline**. To share a list and
+have it sync live across phones (Android ↔ iPhone), connect a free **Firebase**
+project. Nobody sees a login screen — the app signs in anonymously behind the
+scenes so the security rules can keep strangers out.
+
+**1. Create a Firebase project**
+- Go to <https://console.firebase.google.com> → **Add project** → name it (e.g.
+  `grocery-list`) → you can skip Google Analytics.
+
+**2. Add a Web app**
+- In the project, click the **Web** icon (`</>`) → give it a nickname → **Register app**.
+- Firebase shows a `firebaseConfig` object. Copy those values into
+  `src/firebaseConfig.ts` (replacing the `YOUR_…` placeholders).
+
+**3. Turn on anonymous sign-in**
+- Left menu → **Build → Authentication → Get started** → **Sign-in method** →
+  enable **Anonymous**.
+
+**4. Create the database**
+- Left menu → **Build → Firestore Database → Create database** → start in
+  **production mode** → pick a location.
+- Open the **Rules** tab, paste this, and **Publish**:
+
+```
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /lists/{code}/{document=**} {
+      allow read, write: if request.auth != null;
+    }
+  }
+}
+```
+
+That's it. Rebuild the app (`npm start`, or an EAS build). The **Share** button
+in the app now lets you **create a shared list** (you get a code) or **join** one
+with a code. Changes sync across every phone on that code within a second.
+
+> Note: your private list always works fully offline. Shared lists sync live
+> when the phone has a connection.
+
 ## Project layout
 
 ```
@@ -141,7 +184,11 @@ grocery-app/
   src/
     categories.ts         Aisle definitions + "guess the aisle" logic
     recipes.ts            Built-in recipe collection + suggest/search
-    storage.ts            Load/save the list to the phone (AsyncStorage)
+    storage.ts            Load/save the private list (AsyncStorage)
+    useGroceryList.ts     Unified list logic: private (local) OR shared (cloud)
+    firebaseConfig.ts     Your Firebase values (paste to enable sharing)
+    firebase.ts           Firebase init + anonymous sign-in
+    cloud.ts              Firestore data layer: create/join/subscribe/CRUD
     theme.ts              Colors & spacing
     types.ts              The GroceryItem shape
     screens/
@@ -155,6 +202,7 @@ grocery-app/
       TabBar.tsx          Bottom List / Recipes tabs
       RecipeCard.tsx      One recipe in the list
       RecipeDetailModal.tsx  Ingredients + method + add-to-list
+      ShareModal.tsx      Create / join / show code / leave a shared list
 ```
 
 ## Handy commands
