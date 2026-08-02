@@ -32,12 +32,14 @@ class SyncService : Service() {
     private var nsdManager: NsdManager? = null
     private var registrationListener: NsdManager.RegistrationListener? = null
     private lateinit var store: SampleStore
+    private lateinit var runStore: RunStore
 
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onCreate() {
         super.onCreate()
         store = SampleStore(this)
+        runStore = RunStore(this)
         startForeground(NOTIFICATION_ID, buildNotification())
         acquireLocks()
         startServer()
@@ -85,11 +87,20 @@ class SyncService : Service() {
                 store.acknowledge(intervalId, heartRateTime)
         }
 
+        val runSource = object : SyncHttpServer.RunSource {
+            override fun runs() = runStore.runs()
+            override fun run(id: Long) = runStore.run(id)
+            override fun trackpoints(runId: Long) = runStore.trackpoints(runId)
+            override fun markExported(runId: Long) = runStore.markExported(runId)
+            override fun delete(runId: Long) = runStore.delete(runId)
+        }
+
         try {
             server = SyncHttpServer(
                 port = SyncHttpServer.DEFAULT_PORT,
                 deviceName = Build.MODEL ?: "Galaxy Watch",
                 source = source,
+                runs = runSource,
                 auth = auth
             ).also { it.start() }
             advertise(SyncHttpServer.DEFAULT_PORT)
@@ -166,6 +177,7 @@ class SyncService : Service() {
         runCatching { wifiLock?.release() }
         runCatching { multicastLock?.release() }
         runCatching { store.close() }
+        runCatching { runStore.close() }
         super.onDestroy()
     }
 

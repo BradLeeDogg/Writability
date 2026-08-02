@@ -33,6 +33,7 @@ class SyncHttpServer(
     private val port: Int,
     private val deviceName: String,
     private val source: DataSource,
+    private val runs: RunSource,
     private val auth: Auth
 ) : Closeable {
 
@@ -53,6 +54,15 @@ class SyncHttpServer(
         fun codeMatches(code: String?): Boolean
         fun issueToken(): String
         fun pairingWindowOpen(): Boolean
+    }
+
+    /** Recorded runs, kept separate from the passive sample buffer. */
+    interface RunSource {
+        fun runs(): List<Run>
+        fun run(id: Long): Run?
+        fun trackpoints(runId: Long): List<Trackpoint>
+        fun markExported(runId: Long)
+        fun delete(runId: Long)
     }
 
     private var serverSocket: ServerSocket? = null
@@ -131,6 +141,8 @@ class SyncHttpServer(
             "/samples" -> respond(out, 200, samplesBody())
             "/shortcut" -> respond(out, 200, shortcutBody())
 
+            "/runs" -> respond(out, 200, runListBody())
+
             "/ack" -> {
                 val interval = query["interval"]?.toLongOrNull()
                 val heart = query["heart"]?.toLongOrNull()
@@ -142,8 +154,115 @@ class SyncHttpServer(
                 }
             }
 
-            else -> respond(out, 404, errorBody("not found"))
+            else -> handleRunPath(out, path, query)
         }
+    }
+
+    /**
+     * `/runs/<id>` for the split table, `/runs/<id>.tcx` for the file, and
+     * `/runs/<id>/exported` to retire it.
+     */
+    private fun handleRunPath(out: OutputStream, path: String, query: Map<String, String>) {
+        if (!path.startsWith("/runs/")) return respond(out, 404, errorBody("not found"))
+        val rest = path.removePrefix("/runs/")
+
+        when {
+            rest.endsWith(".tcx") -> {
+                val id = rest.removeSuffix(".tcx").toLongOrNull()
+                val run = id?.let { runs.run(it) }
+                    ?: return respond(out, 404, errorBody("no such run"))
+                val tcx = TcxWriter.write(
+                    run,
+                    runs.trackpoints(run.id),
+                    splitMetersFrom(query)
+                )
+                respondFile(out, tcx, "run-${run.id}.tcx")
+            }
+
+            rest.endsWith("/exported") -> {
+                val id = rest.removeSuffix("/exported").toLongOrNull()
+                    ?: return respond(out, 400, errorBody("bad run id"))
+                runs.markExported(id)
+                respond(out, 200, JSONObject().put("ok", true).toString())
+            }
+
+            rest.endsWith("/delete") -> {
+                val id = rest.removeSuffix("/delete").toLongOrNull()
+                    ?: return respond(out, 400, errorBody("bad run id"))
+                runs.delete(id)
+                respond(out, 200, JSONObject().put("ok", true).toString())
+            }
+
+            else -> {
+                val id = rest.toLongOrNull()
+                val run = id?.let { runs.run(it) }
+                    ?: return respond(out, 404, errorBody("no such run"))
+                respond(out, 200, runDetailBody(run, splitMetersFrom(query)))
+            }
+        }
+    }
+
+    /** `?split=mi` switches to mile splits; anything else means kilometres. */
+    private fun splitMetersFrom(query: Map<String, String>): Double =
+        if (query["split"]?.lowercase() in setOf("mi", "mile", "miles")) Splits.MILE
+        else Splits.KILOMETRE
+
+    private fun runListBody(): String {
+        val array = JSONArray()
+        runs.runs().forEach { run ->
+            array.put(JSONObject().apply {
+                put("id", run.id)
+                put("start", iso.format(Instant.ofEpochMilli(run.startedAt)))
+                put("distanceMeters", Math.round(run.distanceMeters))
+                put("durationSeconds", run.activeMillis / 1000)
+                put("calories", Math.round(run.calories))
+                put("exported", run.exported)
+                put("tcx", "/runs/${run.id}.tcx")
+            })
+        }
+        return JSONObject().apply {
+            put("device", deviceName)
+            put("runs", array)
+        }.toString()
+    }
+
+    /**
+     * The split table, pre-formatted. Shortcuts cannot do arithmetic on a list
+     * without a slow loop, so pace arrives ready to display.
+     */
+    private fun runDetailBody(run: Run, splitMeters: Double): String {
+        val points = runs.trackpoints(run.id)
+        val splits = Splits.compute(points, splitMeters)
+
+        val array = JSONArray()
+        splits.forEach { split ->
+            array.put(JSONObject().apply {
+                put("index", split.index)
+                put("distanceMeters", Math.round(split.distanceMeters))
+                put("durationSeconds", split.durationMillis / 1000)
+                put("pace", split.formattedPace())
+                put("paceSecondsPerKm", Math.round(split.paceSecondsPerKm))
+                split.averageBpm?.let { put("averageBpm", Math.round(it)) }
+                split.maxBpm?.let { put("maxBpm", Math.round(it)) }
+                put("partial", split.partial)
+            })
+        }
+
+        val overall = if (run.distanceMeters > 0)
+            (run.activeMillis / 1000.0) / (run.distanceMeters / 1000.0) else 0.0
+
+        return JSONObject().apply {
+            put("id", run.id)
+            put("device", deviceName)
+            put("start", iso.format(Instant.ofEpochMilli(run.startedAt)))
+            put("distanceMeters", Math.round(run.distanceMeters))
+            put("durationSeconds", run.activeMillis / 1000)
+            put("calories", Math.round(run.calories))
+            put("averagePace", "%d:%02d".format(Math.round(overall) / 60, Math.round(overall) % 60))
+            put("hasRoute", points.any { it.latitude != null })
+            put("splits", array)
+            put("tcx", "/runs/${run.id}.tcx")
+        }.toString()
     }
 
     private fun handlePair(out: OutputStream, code: String?) {
@@ -250,6 +369,25 @@ class SyncHttpServer(
             }
 
     private fun errorBody(message: String) = JSONObject().put("error", message).toString()
+
+    /**
+     * Serves the TCX with a filename, so Shortcuts and Safari save it as a file
+     * rather than rendering the XML inline.
+     */
+    private fun respondFile(out: OutputStream, body: String, filename: String) {
+        val bytes = body.toByteArray(Charsets.UTF_8)
+        val header = buildString {
+            append("HTTP/1.1 200 OK\r\n")
+            append("Content-Type: application/vnd.garmin.tcx+xml\r\n")
+            append("Content-Disposition: attachment; filename=\"$filename\"\r\n")
+            append("Content-Length: ${bytes.size}\r\n")
+            append("Connection: close\r\n")
+            append("\r\n")
+        }
+        out.write(header.toByteArray(Charsets.US_ASCII))
+        out.write(bytes)
+        out.flush()
+    }
 
     private fun respond(out: OutputStream, status: Int, body: String) {
         val reason = when (status) {

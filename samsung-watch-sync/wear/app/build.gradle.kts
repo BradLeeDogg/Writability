@@ -37,6 +37,8 @@ dependencies {
     implementation("androidx.activity:activity-ktx:1.9.0")
     implementation("androidx.lifecycle:lifecycle-service:2.8.3")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
+    // await() over the ListenableFutures that Health Services returns
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-guava:1.8.1")
 
     // Google's Health Services — the only sensor API open to third-party apps.
     implementation("androidx.health:health-services-client:1.0.0-rc02")

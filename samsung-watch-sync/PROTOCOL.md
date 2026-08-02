@@ -154,6 +154,81 @@ The watch retires those rows and will not send them again.
 { "ok": true }
 ```
 
+## Runs
+
+Runs are a separate resource from the passive sample buffer, with a different
+lifecycle: a sample is a transient reading that drains on acknowledgement,
+whereas a run is a document that stays on the watch until you have exported it.
+
+Splits are **derived, never stored**. Trackpoints carry cumulative distance, and
+boundary crossings are linearly interpolated between the two points that straddle
+them — so a kilometre boundary is accurate to well under a second even though it
+almost never lands exactly on a sample. Changing the split distance re-slices an
+existing run rather than requiring it to be re-recorded.
+
+Pace is computed from distance and elapsed time rather than read from Health
+Services' `PACE` data type, whose unit convention has moved between library
+versions. TCX stores distance and time for the same reason.
+
+### `GET /runs`
+
+```json
+{
+  "device": "SM-R870",
+  "runs": [
+    {
+      "id": 7,
+      "start": "2026-08-02T07:15:00Z",
+      "distanceMeters": 5420,
+      "durationSeconds": 1632,
+      "calories": 412,
+      "exported": false,
+      "tcx": "/runs/7.tcx"
+    }
+  ]
+}
+```
+
+### `GET /runs/<id>[?split=mi]`
+
+The split table, pre-formatted — Shortcuts cannot do arithmetic over a list
+without a slow loop, so pace arrives ready to display. `split=mi` gives mile
+splits; the default is kilometres.
+
+```json
+{
+  "id": 7,
+  "distanceMeters": 5420,
+  "durationSeconds": 1632,
+  "averagePace": "5:01",
+  "hasRoute": true,
+  "splits": [
+    { "index": 1, "distanceMeters": 1000, "durationSeconds": 295,
+      "pace": "4:55", "averageBpm": 152, "maxBpm": 161, "partial": false },
+    { "index": 6, "distanceMeters": 420, "durationSeconds": 132,
+      "pace": "5:14", "averageBpm": 168, "maxBpm": 174, "partial": true }
+  ],
+  "tcx": "/runs/7.tcx"
+}
+```
+
+### `GET /runs/<id>.tcx[?split=mi]`
+
+The run as Garmin TCX, served with a filename so it saves as a file rather than
+rendering inline.
+
+TCX rather than GPX because it encodes laps as first-class elements carrying
+their own distance, elapsed time and heart rate aggregates. GPX would carry the
+track but push splits into vendor extensions that importers treat inconsistently.
+Strava, Garmin Connect and Runalyze all read TCX laps directly.
+
+Each trackpoint appears in exactly one lap — lap ranges are half-open — because a
+point emitted in two laps duplicates distance for importers.
+
+### `GET /runs/<id>/exported` and `GET /runs/<id>/delete`
+
+Mark a run as exported, or remove it and its trackpoints from the watch.
+
 ## What is deliberately absent
 
 Sleep, stress, blood oxygen, ECG and body composition are not here because Wear OS

@@ -47,13 +47,48 @@ Google's Health Services API, which is open to any app. That means:
 | Steps | Stress |
 | Active energy | Blood oxygen (SpO2) |
 | Distance | ECG |
-| | Body composition (BIA) |
+| GPS route, pace, splits | Body composition (BIA) |
 
 The missing column is Samsung's proprietary algorithms, not an oversight in this
 code. No transport, protocol or permission recovers them.
 
 Your numbers will also drift slightly from what the watch face shows, because this
 app samples the same sensors independently rather than reading Samsung's results.
+
+## Runs
+
+Two modes, and they are genuinely different — not one feature with a flag.
+
+**All-day collection** uses `PassiveMonitoringClient`: cheap, batched, sensor
+only, never turns on GPS, and has no concept of a workout.
+
+**Runs** use `ExerciseClient`, which pins the sensors and the GPS receiver on for
+the duration. That is what makes pace and a route possible, and also why a run is
+started and stopped deliberately from the **Run** app on the watch rather than
+left running.
+
+Splits are derived from trackpoints by interpolating each distance boundary
+between the two samples that straddle it, so a kilometre split is accurate even
+though the boundary almost never lands exactly on a sample. Kilometres by
+default; add `?split=mi` for miles. Changing the split distance re-slices an
+existing run — nothing needs re-recording.
+
+Runs export as **TCX**, which carries laps, route and per-lap heart rate. Upload
+to Strava for pace, splits and a map; Strava can then push the workout into Apple
+Health. Splits cannot go into Apple Health directly — Shortcuts' `Log Workout`
+takes only date, duration, calories and distance.
+
+Two constraints worth knowing before your first run:
+
+- **Only one exercise session may be active device-wide.** Starting a run here
+  while Samsung Health is tracking a workout will fail. That is a platform rule,
+  not something this app can arbitrate.
+- **GPS is expensive.** An hour of recording with GPS costs far more battery than
+  a day of passive collection. Without a fix the run still records — distance
+  comes from step estimation and pace still works — but there is no map.
+
+Auto-pause is deliberately off. It silently stops the clock at traffic lights,
+which makes recorded splits disagree with a stopwatch.
 
 ## Requirements
 
@@ -118,20 +153,31 @@ lunchtime. Expect a noticeable but tolerable reduction.
 
 ## Verified vs. not
 
-`verify_protocol.py` simulates the store, server and client against the real
-logic and checks twelve properties of the sync semantics — cumulative-to-delta
-conversion, midnight rollover, idle suppression, idempotent re-sync, crash
-recovery, the known duplicate window, and the Shortcut aggregation:
+Two simulations port the real logic and assert its properties.
+
+`verify_protocol.py` covers the sync semantics — cumulative-to-delta conversion,
+midnight rollover, idle suppression, idempotent re-sync, crash recovery, the known
+duplicate window, and the Shortcut aggregation.
+
+`verify_splits.py` covers run analysis — split derivation at constant and varying
+pace, boundary interpolation under coarse sampling, partial final splits, pauses,
+mile splits, per-split heart rate, and the structure of the generated TCX:
 
 ```
-$ python3 verify_protocol.py
-ok   cumulative -> deltas sum to total      9000.0   expected 9000
-ok   midnight reset is not negative         9500.0   expected 9500
-ok   crash before write loses nothing             0   expected 0
-ok   write/ack gap double-counts (known)    6000.0   expected 6000
-...
+$ python3 verify_splits.py
+ok   coarse sampling still gives 5:00/km                300.00   expected 300.00
+ok   negative split detected: km 1                      240.00   expected 240.00
+ok   5.4 km yields 6 splits                                  6   expected 6
+ok   pause is included in elapsed time                  360.00   expected 360.00
+ok   every trackpoint appears exactly once                  91   expected 91
 PASS
 ```
+
+The interpolation test is the one that earns its keep: sampling every 60 seconds
+puts trackpoints 200 m apart, so snapping a kilometre boundary to the nearest
+sample instead of interpolating would place it at 1200 m and report 6:00/km for a
+5:00/km effort. The last check caught a real bug — trackpoints on a lap boundary
+were being emitted in two laps, which would have inflated distance for importers.
 
 **Neither app has been compiled.** They were written on Linux without the Android
 SDK or Xcode, so expect to fix small things on first build — most likely the
@@ -143,16 +189,22 @@ between library versions and is pinned here to `1.0.0-rc02`.
 ```
 wear/                      Wear OS app (Kotlin)
   app/src/main/java/com/watchsync/wear/
-    HealthCollectorService.kt   Health Services passive listener
+    HealthCollectorService.kt   Health Services passive listener (all-day)
+    RunRecorder.kt              ExerciseClient session (runs, GPS, pace)
+    RunStore.kt                 Runs and trackpoints
+    Splits.kt                   Distance splits by boundary interpolation
+    TcxWriter.kt                Garmin TCX with laps
     SampleStore.kt              SQLite buffer; totals → interval deltas
     SyncHttpServer.kt           HTTP API, native and Shortcuts shapes
     SyncService.kt              Foreground service, locks, mDNS
     Pairing.kt                  Token and pairing code
     MainActivity.kt             Permissions, pairing code, IP address
+    RunActivity.kt              Start/stop a run, live pace
 ios/WatchSync/             Native iOS app (Swift) — needs a Mac
 SHORTCUT.md                Build the phone side without a Mac
 PROTOCOL.md                Wire contract
 verify_protocol.py         Sync-semantics simulation
+verify_splits.py           Split derivation and TCX structure
 ```
 
 This directory is self-contained and has no relationship to the rest of this

@@ -117,6 +117,47 @@ steps, heart rate, active energy and distance should appear under
 Running it twice in a row should add nothing the second time. If it does, the
 acknowledge step is not working.
 
+## Exporting a run
+
+Runs are separate from the all-day sync above, and they do not go into Apple
+Health as splits — the `Log Workout` action accepts only date, duration, calories
+and distance, with no laps and no route. That is a hard limit of Shortcuts.
+
+So runs export as a **TCX file**, which carries the splits, the route and
+per-lap heart rate. Upload it to Strava and you get pace, splits and a map
+properly rendered; Strava can then push the workout into Apple Health for you if
+you enable that in its settings.
+
+### Shortcut: `Export Run`
+
+1. **Get Contents of URL** → `http://192.168.1.57:8787/runs`, with the same
+   `Authorization` header
+2. **Get Dictionary Value** → key `runs`
+3. **Choose from List** → pick the run you want
+4. **Get Dictionary Value** → key `id` → from the chosen item
+5. **Text** → `http://192.168.1.57:8787/runs/[id].tcx`
+   (insert the `id` variable inline; add `?split=mi` for mile splits)
+6. **Get Contents of URL** → use that text as the URL, same `Authorization` header
+7. **Save File** → choose a folder in iCloud Drive or On My iPhone
+
+Then open **strava.com/upload** in Safari, choose the file, and upload. The web
+uploader works on iOS; the Strava app itself does not import files.
+
+### Seeing splits without leaving the phone
+
+If you just want to read the split table, add a shortcut that fetches
+`http://192.168.1.57:8787/runs/[id]` and shows the `splits` list with
+**Quick Look**. Each entry already contains a formatted `pace`, so nothing needs
+computing.
+
+### Logging the run into Health as well
+
+Optional, and lossy by design: after downloading the TCX, add **Log Workout**
+with type `Running`, and fill duration, distance and calories from the run
+detail. Health will show the run and an average pace, but no splits and no map.
+Alternatively let Strava write it to Health after upload, which gives the same
+result with one less step.
+
 ## Step 4 — Automate it (optional)
 
 **Shortcuts → Automation → + → Time of Day.** Pick a time when the watch is
