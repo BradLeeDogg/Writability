@@ -5,14 +5,30 @@ import Foundation
 struct SamplesResponse: Decodable {
     let protocolVersion: Int
     let device: String
-    let watermark: Int64
+    let cursorInterval: Int64
+    let cursorHeartRate: Int64
+    let intervals: [IntervalSample]
     let heartRate: [HeartRateSample]
-    let daily: [DailyTotals]
 
     enum CodingKeys: String, CodingKey {
         case protocolVersion = "protocol"
-        case device, watermark, heartRate, daily
+        case device, cursorInterval, cursorHeartRate, intervals, heartRate
     }
+
+    var isEmpty: Bool { intervals.isEmpty && heartRate.isEmpty }
+}
+
+/// An activity delta over a closed time window — "142 steps between 14:05 and
+/// 14:20". Append-only: each maps to exactly one HealthKit sample and is never
+/// restated, so nothing ever has to be deleted.
+struct IntervalSample: Decodable {
+    let start: Int64
+    let end: Int64
+    let field: String
+    let value: Double
+
+    var startDate: Date { Date(timeIntervalSince1970: TimeInterval(start) / 1000) }
+    var endDate: Date { Date(timeIntervalSince1970: TimeInterval(end) / 1000) }
 }
 
 struct HeartRateSample: Decodable {
@@ -20,14 +36,6 @@ struct HeartRateSample: Decodable {
     let bpm: Double
 
     var date: Date { Date(timeIntervalSince1970: TimeInterval(t) / 1000) }
-}
-
-struct DailyTotals: Decodable {
-    let date: String
-    let updatedAt: Int64
-    let steps: Int
-    let calories: Double
-    let distanceMeters: Double
 }
 
 struct PairResponse: Decodable {
@@ -44,30 +52,23 @@ enum SyncError: Error {
     case notPaired
 }
 
-/// Talks to the watch's HTTP API. Stateless apart from the stored token and
-/// watermark, both of which live in `UserDefaults` — losing them costs a full
-/// re-sync, not data.
+/// Talks to the watch's HTTP API.
+///
+/// Delivery position lives on the *watch*, not here: the client fetches whatever
+/// is unacknowledged and confirms with `/ack` once HealthKit has accepted it.
+/// Reinstalling the app therefore cannot silently skip data.
 final class SyncClient {
 
     private let defaults = UserDefaults.standard
     private let tokenKey = "watchsync.token"
-    private let watermarkKey = "watchsync.watermark"
 
     var token: String? {
         get { defaults.string(forKey: tokenKey) }
         set { defaults.set(newValue, forKey: tokenKey) }
     }
 
-    /// Last timestamp successfully committed to HealthKit. Only advanced after
-    /// the write completes, so an interrupted sync repeats rather than skips.
-    var watermark: Int64 {
-        get { Int64(defaults.integer(forKey: watermarkKey)) }
-        set { defaults.set(Int(newValue), forKey: watermarkKey) }
-    }
-
     var isPaired: Bool { token != nil }
 
-    /// Exchanges the 6-character code shown on the watch for the full token.
     func pair(with code: String, at base: URL) async throws -> String {
         var components = URLComponents(url: base.appendingPathComponent("pair"),
                                        resolvingAgainstBaseURL: false)!
@@ -85,11 +86,24 @@ final class SyncClient {
     }
 
     func fetchSamples(at base: URL) async throws -> SamplesResponse {
+        let data = try await get(base.appendingPathComponent("samples"), query: [])
+        return try JSONDecoder().decode(SamplesResponse.self, from: data)
+    }
+
+    /// Confirms delivery. Called only after HealthKit has committed everything,
+    /// so an interrupted sync repeats rather than skips.
+    func acknowledge(_ response: SamplesResponse, at base: URL) async throws {
+        _ = try await get(base.appendingPathComponent("ack"), query: [
+            URLQueryItem(name: "interval", value: String(response.cursorInterval)),
+            URLQueryItem(name: "heart", value: String(response.cursorHeartRate))
+        ])
+    }
+
+    private func get(_ url: URL, query: [URLQueryItem]) async throws -> Data {
         guard let token else { throw SyncError.notPaired }
 
-        var components = URLComponents(url: base.appendingPathComponent("samples"),
-                                       resolvingAgainstBaseURL: false)!
-        components.queryItems = [URLQueryItem(name: "since", value: String(watermark))]
+        var components = URLComponents(url: url, resolvingAgainstBaseURL: false)!
+        if !query.isEmpty { components.queryItems = query }
 
         var request = URLRequest(url: components.url!)
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
@@ -100,6 +114,6 @@ final class SyncClient {
         guard http.statusCode == 200 else {
             throw http.statusCode == 401 ? SyncError.unauthorized : SyncError.server(http.statusCode)
         }
-        return try JSONDecoder().decode(SamplesResponse.self, from: data)
+        return data
     }
 }

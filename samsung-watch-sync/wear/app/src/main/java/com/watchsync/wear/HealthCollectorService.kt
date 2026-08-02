@@ -5,6 +5,7 @@ import android.util.Log
 import androidx.health.services.client.PassiveListenerService
 import androidx.health.services.client.data.DataPointContainer
 import androidx.health.services.client.data.DataType
+import androidx.health.services.client.data.IntervalDataPoint
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -36,35 +37,20 @@ class HealthCollectorService : PassiveListenerService() {
         try {
             dataPoints.getData(DataType.HEART_RATE_BPM).forEach { point ->
                 val t = point.getTimeInstant(bootInstant).toEpochMilli()
-                // Health Services emits 0.0 when the sensor has no contact with skin.
+                // Health Services emits 0.0 when the sensor has no skin contact.
                 if (point.value > 0.0) store.insertHeartRate(t, point.value)
             }
 
-            dataPoints.getData(DataType.STEPS_DAILY).forEach { point ->
-                store.updateDaily(
-                    date = point.dayOf(bootInstant),
-                    updatedAt = point.getEndInstant(bootInstant).toEpochMilli(),
-                    field = SampleStore.DailyField.STEPS,
-                    value = point.value.toDouble()
-                )
+            // These arrive as totals-so-far-today; SampleStore differences them
+            // into append-only intervals.
+            dataPoints.getData(DataType.STEPS_DAILY).forEach {
+                store.record(it, bootInstant, SampleStore.DailyField.STEPS, it.value.toDouble())
             }
-
-            dataPoints.getData(DataType.CALORIES_DAILY).forEach { point ->
-                store.updateDaily(
-                    date = point.dayOf(bootInstant),
-                    updatedAt = point.getEndInstant(bootInstant).toEpochMilli(),
-                    field = SampleStore.DailyField.CALORIES,
-                    value = point.value
-                )
+            dataPoints.getData(DataType.CALORIES_DAILY).forEach {
+                store.record(it, bootInstant, SampleStore.DailyField.CALORIES, it.value)
             }
-
-            dataPoints.getData(DataType.DISTANCE_DAILY).forEach { point ->
-                store.updateDaily(
-                    date = point.dayOf(bootInstant),
-                    updatedAt = point.getEndInstant(bootInstant).toEpochMilli(),
-                    field = SampleStore.DailyField.DISTANCE,
-                    value = point.value
-                )
+            dataPoints.getData(DataType.DISTANCE_DAILY).forEach {
+                store.record(it, bootInstant, SampleStore.DailyField.DISTANCE, it.value)
             }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to persist passive data batch", e)
@@ -73,12 +59,16 @@ class HealthCollectorService : PassiveListenerService() {
         }
     }
 
-    private fun androidx.health.services.client.data.IntervalDataPoint<*>.dayOf(
-        bootInstant: Instant
-    ): String = getEndInstant(bootInstant)
-        .atZone(ZoneId.systemDefault())
-        .toLocalDate()
-        .format(dayFormat)
+    private fun SampleStore.record(
+        point: IntervalDataPoint<*>,
+        bootInstant: Instant,
+        field: SampleStore.DailyField,
+        total: Double
+    ) {
+        val end = point.getEndInstant(bootInstant)
+        val date = end.atZone(ZoneId.systemDefault()).toLocalDate().format(dayFormat)
+        recordCumulative(date, field, total, end.toEpochMilli())
+    }
 
     companion object {
         private const val TAG = "HealthCollector"

@@ -1,109 +1,162 @@
-# WatchSync wire protocol
+# WatchSync wire protocol (v2)
 
-A tiny read-only HTTP/JSON API served **by the watch**, consumed **by the iPhone**,
-over the local Wi-Fi network. The watch is the server because it is the only device
-that can collect the data; the phone pulls on demand.
+A small read-only HTTP/JSON API served **by the watch**, consumed **by the
+iPhone**, over the local Wi-Fi network. The watch is the server because it is the
+only device that can collect the data; the phone pulls on demand.
+
+## The central design decision: deltas, not totals
+
+Health Services reports steps, calories and distance as **cumulative daily
+totals** — a number that climbs all day and resets at midnight. The same day is
+therefore reported many times with a larger value each time. Handing those to a
+consumer means the consumer must *replace* what it wrote before, which requires
+the ability to delete previously written samples.
+
+Apple Shortcuts cannot delete health samples. That single limitation dictates the
+protocol.
+
+So the watch differences the totals at collection time and stores **append-only
+interval deltas**: "142 steps between 14:05 and 14:20". Every record is immutable
+once written, maps to exactly one HealthKit sample, and a day's records sum back
+to the daily total. Nothing ever needs deleting, so both a native client and a
+Shortcut can consume the same stream.
+
+A total that moves *backwards* means the day rolled over, so the new value is
+taken as the whole delta rather than producing a negative one.
+
+## Delivery position lives on the watch
+
+There is no client-side watermark. The watch tracks what has been acknowledged;
+the client fetches whatever is outstanding and confirms with `/ack` once the data
+is committed. Reinstalling the phone app therefore cannot silently skip data.
+
+Acknowledged rows are deleted from the watch, which is also what keeps its
+storage bounded.
+
+### The known duplicate window
+
+Acknowledgement happens *after* the write, which makes delivery **at-least-once**:
+
+| Failure point | Result |
+| --- | --- |
+| Before writing | Redelivered next sync. No loss. |
+| Between write and ack | Redelivered and written twice. **Duplicate.** |
+| After ack | Nothing outstanding. Correct. |
+
+The middle row is a real defect, not an oversight. Closing it needs the client to
+deduplicate against what it has already stored, which the Shortcuts path cannot
+do. Acking *before* writing would trade duplicates for silent data loss, which is
+worse — an inflated number is visible, a missing one is not.
+
+The window is milliseconds wide and only opens if the app or Shortcut dies
+mid-run. `verify_protocol.py` asserts this behaviour explicitly so it stays a
+documented property rather than a surprise.
 
 ## Discovery
 
-The watch advertises via mDNS/Bonjour:
+The watch advertises over mDNS as `_watchsync._tcp` on port `8787`, which the
+native client browses for with `NWBrowser`.
 
-- Service type: `_watchsync._tcp`
-- Port: `8787` (fixed; changed only if already bound)
-- TXT record: `v=1`
-
-The phone browses for `_watchsync._tcp`, resolves the first result to a host/port,
-and talks plain HTTP to it. No TLS: traffic never leaves the LAN, and a self-signed
-cert would add a trust-prompt problem without adding meaningful protection here.
+**Shortcuts has no Bonjour support**, so the Shortcut addresses the watch by IP.
+The watch displays its own address on the pairing screen for this reason. A DHCP
+reservation on your router keeps it from moving.
 
 ## Authentication
 
-The watch generates a random 128-bit token on first launch and displays the first
-6 characters as a pairing code. The phone stores the full token after pairing.
-
-Every request must carry:
+The watch generates a random 128-bit token on first launch and shows the first
+6 characters as a pairing code. All endpoints except `/pair` require:
 
 ```
 Authorization: Bearer <token>
 ```
 
-Missing or wrong token returns `401`. This exists so that other devices on the same
-Wi-Fi (a guest laptop, a smart TV) cannot read your health data by scanning for the
-service. It is not defence against an attacker who already controls your network.
+This stops other devices on the same Wi-Fi from reading your health data. It is
+not defence against someone who already controls your network — the transport is
+plain HTTP, deliberately, since a self-signed certificate would add a trust
+problem without adding real protection on a LAN.
 
 ### `GET /pair?code=<6-char code>`
 
-The one endpoint that does **not** require the bearer token. Returns the full token
-if `code` matches the displayed pairing code. The watch only answers this while the
-pairing screen is open on the watch, which bounds the window in which an unpaired
-device can claim the token.
+The only unauthenticated endpoint, and only answered while the pairing screen is
+open on the watch. That window is what bounds an unpaired device's chance to
+claim the token.
 
 ```json
-{ "token": "9f2c...", "device": "Galaxy Watch4" }
+{ "token": "9f2c…", "device": "SM-R870" }
 ```
 
-Wrong code or pairing screen closed returns `403`.
+Returns `403` on a wrong code or a closed window.
 
 ## Endpoints
 
 ### `GET /health`
 
-Liveness check. Returns `200` with:
-
 ```json
-{ "ok": true, "device": "Galaxy Watch4", "protocol": 1 }
+{ "ok": true, "device": "SM-R870", "protocol": 2 }
 ```
 
-### `GET /samples?since=<epochMillis>`
+### `GET /samples`
 
-Returns everything recorded strictly after `since`. Pass `since=0` for a full dump.
+Everything unacknowledged, in full fidelity. For a native client.
 
 ```json
 {
-  "protocol": 1,
-  "device": "Galaxy Watch4",
-  "watermark": 1754140800000,
-  "heartRate": [
-    { "t": 1754139000000, "bpm": 62.0 },
-    { "t": 1754139300000, "bpm": 71.0 }
+  "protocol": 2,
+  "device": "SM-R870",
+  "cursorInterval": 412,
+  "cursorHeartRate": 1754140800000,
+  "intervals": [
+    { "start": 1754139000000, "end": 1754139900000, "field": "steps", "value": 142 }
   ],
-  "daily": [
-    {
-      "date": "2026-08-02",
-      "updatedAt": 1754140800000,
-      "steps": 8431,
-      "calories": 412.5,
-      "distanceMeters": 6234.1
-    }
+  "heartRate": [
+    { "t": 1754139000000, "bpm": 62.0 }
   ]
 }
 ```
 
-`watermark` is the timestamp the client should send as `since` on its next call.
-The client persists it only after every sample in the response has been committed
-to HealthKit, so a crash mid-write causes re-delivery rather than silent loss.
+Cursors are taken from the rows actually returned, not from the store's current
+maximum, so data arriving mid-response is carried to the next sync rather than
+acknowledged unseen.
 
-## The two sample shapes, and why they differ
+### `GET /shortcut`
 
-**`heartRate` is append-only.** Each entry is a discrete reading at an instant.
-The phone writes each one to HealthKit once and never revisits it. Deduplication is
-purely the `since` watermark.
+The same data, flattened for Apple Shortcuts, which has no JSON path expressions,
+cannot pass a variable into a health sample's type field, and loops slowly enough
+that a few hundred heart rate points would take minutes.
 
-**`daily` is a running total that gets restated.** Health Services reports steps,
-calories and distance as cumulative daily aggregates that climb all day and reset at
-midnight. The same `date` will therefore be returned repeatedly with a larger value,
-and naively appending each one to HealthKit would multiply your step count several
-times over.
+Activity collapses to three scalars — one `Log Health Sample` action each — and
+heart rate is averaged per hour. Timestamps are ISO 8601, which Shortcuts parses
+directly.
 
-So the phone treats `daily` as a **replace**, not an append: for each returned date it
-deletes the samples it previously wrote for that day, then writes the new total as a
-single sample spanning that day. HealthKit permits an app to delete samples it
-authored, so this is idempotent — replaying the same response yields the same result.
-This is the single most important correctness detail in the protocol.
+```json
+{
+  "device": "SM-R870",
+  "steps": 3184,
+  "calories": 212.4,
+  "distanceMeters": 2410.8,
+  "windowStart": "2026-08-02T09:15:00Z",
+  "windowEnd": "2026-08-02T14:20:00Z",
+  "heartRate": [
+    { "time": "2026-08-02T09:30:00Z", "bpm": 64.2 }
+  ],
+  "cursorInterval": 412,
+  "cursorHeartRate": 1754140800000,
+  "hasData": true
+}
+```
+
+### `GET /ack?interval=<id>&heart=<epochMillis>`
+
+Confirms delivery. Echo back the cursors from the response you just committed.
+The watch retires those rows and will not send them again.
+
+```json
+{ "ok": true }
+```
 
 ## What is deliberately absent
 
 Sleep, stress, blood oxygen, ECG and body composition are not here because Wear OS
-does not expose them to third-party apps. They are computed by Samsung's proprietary
-algorithms behind the partner-only Privileged Health SDK. No amount of protocol design
-recovers them.
+does not expose them to third-party apps. They are computed by Samsung's
+proprietary algorithms behind the partner-only Privileged Health SDK. No amount of
+protocol design recovers them.

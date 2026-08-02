@@ -1,25 +1,35 @@
 # WatchSync
 
 Copies health data from a Galaxy Watch4 to an iPhone over local Wi-Fi, writing it
-into Apple Health. No cloud service, no account, no Android phone in the loop
-during normal operation.
-
-Two apps and a small HTTP contract:
+into Apple Health. No cloud service, no account, and no Android phone in the loop.
 
 ```
 Galaxy Watch4                          iPhone
 ┌──────────────────────────┐           ┌────────────────────────────┐
-│ Health Services (passive)│           │ NWBrowser  finds _watchsync│
-│          ↓               │           │          ↓                 │
-│ SampleStore (SQLite)     │  Wi-Fi    │ SyncClient  GET /samples   │
-│          ↓               │ ────────► │          ↓                 │
-│ SyncHttpServer  :8787    │   LAN     │ HealthKitWriter → Health   │
-│ advertised via mDNS      │           │                            │
+│ Health Services (passive)│           │ Apple Shortcuts            │
+│          ↓               │  Wi-Fi    │   Get Contents of URL      │
+│ SampleStore  (deltas)    │ ────────► │   Log Health Sample        │
+│          ↓               │   LAN     │   → Apple Health           │
+│ SyncHttpServer  :8787    │           │   GET /ack                 │
 └──────────────────────────┘           └────────────────────────────┘
 ```
 
-The watch collects continuously and buffers locally. The phone pulls when you open
-it and press Sync. See [PROTOCOL.md](PROTOCOL.md) for the wire format.
+The watch collects continuously and buffers locally. The phone pulls when you run
+the shortcut, writes to Health, then acknowledges so the watch can discard what it
+sent.
+
+## Two ways to build the phone side
+
+**[Apple Shortcuts](SHORTCUT.md) — no Mac required.** Built entirely on the
+iPhone: fetch JSON, log health samples, acknowledge. Can be automated on a
+schedule. This is the recommended path unless you own a Mac.
+
+**A native iOS app** (`ios/WatchSync/`) — Swift, with Bonjour discovery and
+per-reading heart rate instead of hourly averages. Requires a Mac with Xcode and
+an Apple Developer account. Included because it is the better client if you ever
+have the toolchain; it is *not* buildable on Windows or Linux.
+
+Both speak the same [protocol](PROTOCOL.md).
 
 ## Read this before you build anything
 
@@ -47,86 +57,86 @@ app samples the same sensors independently rather than reading Samsung's results
 
 ## Requirements
 
-- Galaxy Watch4 (or later Wear OS Galaxy Watch), already set up
-- **An Android phone, once** — the Watch4 cannot complete first-time setup without
-  one, and you need it to enable developer mode. Not needed afterwards.
-- A Mac with Xcode, and an Apple Developer account. A free account works but
-  re-signing is required every 7 days; a paid account ($99/yr) lasts a year.
-- Android Studio, for the watch app.
-- Both devices on the same Wi-Fi network, with client isolation off (most home
-  routers; many guest and public networks block device-to-device traffic).
+- Galaxy Watch4 (or later Wear OS Galaxy Watch), **already set up**. The watch
+  cannot complete first-time setup without an Android phone — but if yours is
+  already running, you do not need one again.
+- A Windows or Linux computer, for Android Studio and ADB.
+- Both devices on the same Wi-Fi, with client isolation (AP isolation) off. Most
+  home routers are fine; guest and public networks usually are not.
+- For the optional native iOS app only: a Mac with Xcode and an Apple Developer
+  account.
 
-## Building the watch app
+## Building and installing the watch app
 
 ```bash
 cd wear
-./gradlew :app:assembleDebug
+./gradlew :app:assembleDebug          # gradlew.bat on Windows
 ```
 
-Enable wireless debugging on the watch: Settings → About watch → Software → tap
-Software version 7 times, then Settings → Developer options → ADB debugging and
-Wireless debugging. Note the IP and port shown, then:
+On the watch, enable developer access — no phone needed:
+
+1. Settings → About watch → Software → tap **Software version** seven times
+2. Settings → Developer options → enable **ADB debugging** and **Wireless debugging**
+3. Tap Wireless debugging to see the IP and port
+
+Then from your computer, with the Android platform tools installed:
 
 ```bash
 adb connect <watch-ip>:<port>
 adb install app/build/outputs/apk/debug/app-debug.apk
 ```
 
-Launch WatchSync on the watch and grant sensor permissions. It shows a 6-character
-pairing code and starts collecting.
+Launch WatchSync on the watch and grant sensor permissions. It shows a pairing
+code and the watch's address, and starts collecting immediately.
 
-## Building the iPhone app
-
-Create a new iOS App project in Xcode named `WatchSync`, add the `ios/WatchSync/*.swift`
-files, and merge the keys from `ios/WatchSync/Info.plist` into the target's Info.plist.
-Then enable the **HealthKit** capability under Signing & Capabilities.
-
-Three settings are easy to miss, and each fails in a way that looks like something
-else:
-
-- `NSLocalNetworkUsageDescription` and `NSBonjourServices` — without them Bonjour
-  browsing returns nothing and the watch just appears to be absent.
-- `NSAllowsLocalNetworking` — without it App Transport Security blocks the plain
-  HTTP request.
-- The HealthKit capability — without it authorization fails at runtime rather than
-  at build time.
-
-Run on your iPhone, enter the code from the watch, press Pair, then Sync.
+Next: **[SHORTCUT.md](SHORTCUT.md)**.
 
 ## Reliability, honestly
 
-**Sync is manual and opportunistic.** Open the app, press Sync. That is a deliberate
-choice: iOS background execution is too constrained to promise unattended syncing,
-and pretending otherwise would produce an app that silently stops working.
+**Sync is manual or scheduled, never continuous.** You run the shortcut, or a
+time-of-day automation runs it. That is a deliberate limit, not a missing feature.
 
 **The watch is not always reachable.** Wear OS aggressively powers down the Wi-Fi
 radio when the screen is off and the watch is on battery. `SyncService` holds a
-`WIFI_MODE_FULL_HIGH_PERF` lock and a multicast lock to fight this, and runs in the
-foreground so the process survives, but it does not win outright. In practice the
-watch is most reliably reachable while charging or while the screen is on. Syncing
-once a day while the watch sits on its charger works well; expecting it to answer
-at 3am on battery does not.
+`WIFI_MODE_FULL_HIGH_PERF` lock and a multicast lock and runs in the foreground,
+which helps but does not win outright. In practice the watch answers most reliably
+while charging or with the screen on. Syncing once a day while it sits on the
+charger works well; expecting a response at 3am on battery does not.
 
-**Collection continues regardless.** Data accumulates in SQLite on the watch whether
-or not the phone can reach it, so an unreachable watch delays a sync rather than
-losing anything. Heart rate rows are pruned once collected; daily rows are kept.
+**Collection continues regardless.** Data accumulates on the watch whether or not
+the phone can reach it, so an unreachable watch delays a sync rather than losing
+anything. Rows are deleted only once acknowledged.
 
-**Battery.** Passive monitoring rather than an active exercise session, which is the
-difference between a modest background cost and flattening the watch by lunchtime.
-Expect a noticeable but tolerable reduction.
+**Delivery is at-least-once.** A crash in the gap between writing to Health and
+acknowledging will duplicate that batch. The window is milliseconds and the
+alternative — acknowledging first — would trade visible duplicates for silent
+loss. See PROTOCOL.md for why this is not fixable on the Shortcuts path.
+
+**Battery.** Passive monitoring rather than an active exercise session, which is
+the difference between a modest background cost and flattening the watch by
+lunchtime. Expect a noticeable but tolerable reduction.
 
 ## Verified vs. not
 
-The sync semantics — cumulative daily totals, watermark advance, crash recovery —
-are simulated and verified in `verify_protocol.py`, run against a faithful model of
-the store, server and HealthKit writer. That test demonstrates the specific bug the
-design exists to avoid: appending restated daily totals rather than replacing them
-reports 16,000 steps for a 9,000-step day.
+`verify_protocol.py` simulates the store, server and client against the real
+logic and checks twelve properties of the sync semantics — cumulative-to-delta
+conversion, midnight rollover, idle suppression, idempotent re-sync, crash
+recovery, the known duplicate window, and the Shortcut aggregation:
 
-Neither app has been compiled. They were written on Linux, without the Android SDK
-or Xcode, so expect to fix small things on first build — most likely the Health
-Services generics in `HealthCollectorService`, whose exact shape moved between
-library versions and is pinned here to `1.0.0-rc02`.
+```
+$ python3 verify_protocol.py
+ok   cumulative -> deltas sum to total      9000.0   expected 9000
+ok   midnight reset is not negative         9500.0   expected 9500
+ok   crash before write loses nothing             0   expected 0
+ok   write/ack gap double-counts (known)    6000.0   expected 6000
+...
+PASS
+```
+
+**Neither app has been compiled.** They were written on Linux without the Android
+SDK or Xcode, so expect to fix small things on first build — most likely the
+Health Services generics in `HealthCollectorService.kt`, whose exact shape moved
+between library versions and is pinned here to `1.0.0-rc02`.
 
 ## Layout
 
@@ -134,17 +144,15 @@ library versions and is pinned here to `1.0.0-rc02`.
 wear/                      Wear OS app (Kotlin)
   app/src/main/java/com/watchsync/wear/
     HealthCollectorService.kt   Health Services passive listener
-    SampleStore.kt              SQLite buffer
-    SyncHttpServer.kt           HTTP API (Android-independent logic)
+    SampleStore.kt              SQLite buffer; totals → interval deltas
+    SyncHttpServer.kt           HTTP API, native and Shortcuts shapes
     SyncService.kt              Foreground service, locks, mDNS
     Pairing.kt                  Token and pairing code
-    MainActivity.kt             Permissions and pairing screen
-ios/WatchSync/             iOS app (Swift)
-    Discovery.swift             Bonjour browse and resolve
-    SyncClient.swift            Pair and fetch
-    HealthKitWriter.swift       Append heart rate, replace daily totals
-    ContentView.swift           UI
+    MainActivity.kt             Permissions, pairing code, IP address
+ios/WatchSync/             Native iOS app (Swift) — needs a Mac
+SHORTCUT.md                Build the phone side without a Mac
 PROTOCOL.md                Wire contract
+verify_protocol.py         Sync-semantics simulation
 ```
 
 This directory is self-contained and has no relationship to the rest of this

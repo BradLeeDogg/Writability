@@ -71,9 +71,18 @@ class SyncService : Service() {
         }
 
         val source = object : SyncHttpServer.DataSource {
-            override fun heartRateSince(since: Long) = store.heartRateSince(since)
-            override fun dailySince(since: Long) = store.dailySince(since)
-            override fun watermark() = store.watermark()
+            override fun heartRateAfter(t: Long) = store.heartRateAfter(t)
+            override fun intervalsAfter(id: Long) = store.intervalsAfter(id)
+            override fun totalAfter(id: Long, field: SampleStore.DailyField) =
+                store.totalAfter(id, field)
+
+            override fun intervalRange(id: Long) = store.intervalRange(id)
+            override fun maxIntervalId() = store.maxIntervalId()
+            override fun maxHeartRateTime() = store.maxHeartRateTime()
+            override fun ackedIntervalId() = store.ackedIntervalId()
+            override fun ackedHeartRateTime() = store.ackedHeartRateTime()
+            override fun acknowledge(intervalId: Long, heartRateTime: Long) =
+                store.acknowledge(intervalId, heartRateTime)
         }
 
         try {

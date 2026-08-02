@@ -10,6 +10,9 @@ import java.io.OutputStream
 import java.net.ServerSocket
 import java.net.Socket
 import java.net.URLDecoder
+import java.time.Instant
+import java.time.ZoneOffset
+import java.time.format.DateTimeFormatter
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 
@@ -17,11 +20,14 @@ import java.util.concurrent.TimeUnit
  * A deliberately small HTTP/1.1 server exposing the read-only sync API.
  *
  * Hand-rolled on [ServerSocket] rather than pulling in a web framework: the
- * surface is three GET endpoints on a LAN, and every dependency added to a Wear
- * build is another thing that can fail to resolve or bloat the APK.
+ * surface is a handful of GET endpoints on a LAN, and every dependency added to
+ * a Wear build is another thing that can fail to resolve or bloat the APK.
  *
- * Data access goes through [DataSource] so the protocol can be exercised without
- * an Android device or a real sensor stream.
+ * Two shapes of the same data are served. `/samples` is the faithful one, for a
+ * real client. `/shortcut` is flattened and pre-aggregated for Apple Shortcuts,
+ * which has no JSON path expressions, cannot pass a variable into a health
+ * sample's type field, and loops slowly enough that a few hundred heart rate
+ * points would take minutes.
  */
 class SyncHttpServer(
     private val port: Int,
@@ -30,14 +36,18 @@ class SyncHttpServer(
     private val auth: Auth
 ) : Closeable {
 
-    /** Everything the server needs from storage. */
     interface DataSource {
-        fun heartRateSince(since: Long): List<HeartRateSample>
-        fun dailySince(since: Long): List<DailyTotals>
-        fun watermark(): Long
+        fun heartRateAfter(t: Long): List<HeartRateSample>
+        fun intervalsAfter(id: Long): List<IntervalSample>
+        fun totalAfter(id: Long, field: SampleStore.DailyField): Double
+        fun intervalRange(id: Long): Pair<Long, Long>?
+        fun maxIntervalId(): Long
+        fun maxHeartRateTime(): Long
+        fun ackedIntervalId(): Long
+        fun ackedHeartRateTime(): Long
+        fun acknowledge(intervalId: Long, heartRateTime: Long)
     }
 
-    /** Everything the server needs from pairing, kept injectable for tests. */
     interface Auth {
         fun tokenMatches(bearer: String?): Boolean
         fun codeMatches(code: String?): Boolean
@@ -48,6 +58,8 @@ class SyncHttpServer(
     private var serverSocket: ServerSocket? = null
     private val workers = Executors.newFixedThreadPool(2)
     @Volatile private var running = false
+
+    private val iso = DateTimeFormatter.ISO_INSTANT
 
     fun start() {
         if (running) return
@@ -85,12 +97,12 @@ class SyncHttpServer(
     private fun handle(client: Socket) {
         val reader = BufferedReader(InputStreamReader(client.getInputStream()))
         val requestLine = reader.readLine() ?: return
+        val out = client.getOutputStream()
 
         val parts = requestLine.split(" ")
-        if (parts.size < 2) return respond(client.getOutputStream(), 400, errorBody("malformed request"))
+        if (parts.size < 2) return respond(out, 400, errorBody("malformed request"))
         val (method, target) = parts[0] to parts[1]
 
-        // Collect headers; we only care about Authorization.
         var bearer: String? = null
         while (true) {
             val line = reader.readLine()
@@ -101,27 +113,35 @@ class SyncHttpServer(
             }
         }
 
-        val out = client.getOutputStream()
         if (method != "GET") return respond(out, 405, errorBody("method not allowed"))
 
         val path = target.substringBefore('?')
         val query = parseQuery(target.substringAfter('?', ""))
 
+        if (path == "/pair") return handlePair(out, query["code"])
+        if (!auth.tokenMatches(bearer)) return respond(out, 401, errorBody("unauthorized"))
+
         when (path) {
-            "/pair" -> handlePair(out, query["code"])
-            "/health" -> {
-                if (!auth.tokenMatches(bearer)) return respond(out, 401, errorBody("unauthorized"))
-                respond(out, 200, JSONObject().apply {
-                    put("ok", true)
-                    put("device", deviceName)
-                    put("protocol", PROTOCOL_VERSION)
-                }.toString())
+            "/health" -> respond(out, 200, JSONObject().apply {
+                put("ok", true)
+                put("device", deviceName)
+                put("protocol", PROTOCOL_VERSION)
+            }.toString())
+
+            "/samples" -> respond(out, 200, samplesBody())
+            "/shortcut" -> respond(out, 200, shortcutBody())
+
+            "/ack" -> {
+                val interval = query["interval"]?.toLongOrNull()
+                val heart = query["heart"]?.toLongOrNull()
+                if (interval == null || heart == null) {
+                    respond(out, 400, errorBody("interval and heart required"))
+                } else {
+                    source.acknowledge(interval, heart)
+                    respond(out, 200, JSONObject().put("ok", true).toString())
+                }
             }
-            "/samples" -> {
-                if (!auth.tokenMatches(bearer)) return respond(out, 401, errorBody("unauthorized"))
-                val since = query["since"]?.toLongOrNull() ?: 0L
-                respond(out, 200, samplesBody(since))
-            }
+
             else -> respond(out, 404, errorBody("not found"))
         }
     }
@@ -140,46 +160,93 @@ class SyncHttpServer(
     }
 
     /**
-     * Note the ordering: the watermark is read *before* the samples, so any sample
-     * that lands mid-response is simply re-sent next time rather than being skipped.
-     * Re-delivery is harmless (heart rate is keyed by timestamp, daily totals are
-     * replaced); a gap would be permanent data loss.
+     * Everything not yet acknowledged, in full fidelity.
+     *
+     * The cursor is captured from the rows actually returned rather than from
+     * the store's current maximum, so data arriving mid-response is carried to
+     * the next sync instead of being acknowledged unseen.
      */
-    internal fun samplesBody(since: Long): String {
-        val watermark = source.watermark()
-        val heartRate = JSONArray()
-        source.heartRateSince(since).forEach { sample ->
-            heartRate.put(JSONObject().apply {
+    internal fun samplesBody(): String {
+        val sinceInterval = source.ackedIntervalId()
+        val sinceHeart = source.ackedHeartRateTime()
+
+        val intervals = source.intervalsAfter(sinceInterval)
+        val heartRate = source.heartRateAfter(sinceHeart)
+
+        val intervalsJson = JSONArray()
+        intervals.forEach { sample ->
+            intervalsJson.put(JSONObject().apply {
+                put("start", sample.startMillis)
+                put("end", sample.endMillis)
+                put("field", sample.field)
+                put("value", sample.value)
+            })
+        }
+        val heartRateJson = JSONArray()
+        heartRate.forEach { sample ->
+            heartRateJson.put(JSONObject().apply {
                 put("t", sample.epochMillis)
                 put("bpm", sample.bpm)
             })
         }
-        val daily = JSONArray()
-        source.dailySince(since).forEach { day ->
-            daily.put(JSONObject().apply {
-                put("date", day.date)
-                put("updatedAt", day.updatedAt)
-                put("steps", day.steps)
-                put("calories", day.calories)
-                put("distanceMeters", day.distanceMeters)
-            })
-        }
+
         return JSONObject().apply {
             put("protocol", PROTOCOL_VERSION)
             put("device", deviceName)
-            put("watermark", watermark)
-            put("heartRate", heartRate)
-            put("daily", daily)
+            put("cursorInterval", intervals.lastOrNull()?.id ?: sinceInterval)
+            put("cursorHeartRate", heartRate.lastOrNull()?.epochMillis ?: sinceHeart)
+            put("intervals", intervalsJson)
+            put("heartRate", heartRateJson)
         }.toString()
     }
+
+    /**
+     * The same data, flattened for Apple Shortcuts.
+     *
+     * Activity totals collapse to three scalars, each becoming one Log Health
+     * Sample action. Heart rate is averaged per hour, turning a loop over
+     * hundreds of points into a loop over a handful.
+     */
+    internal fun shortcutBody(): String {
+        val sinceInterval = source.ackedIntervalId()
+        val sinceHeart = source.ackedHeartRateTime()
+
+        val range = source.intervalRange(sinceInterval)
+        val heartRate = source.heartRateAfter(sinceHeart)
+
+        val hourly = JSONArray()
+        heartRate.groupBy { it.epochMillis / HOUR_MS }.toSortedMap().forEach { (hour, samples) ->
+            hourly.put(JSONObject().apply {
+                // Midpoint of the hour: a sane instant to attribute the average to.
+                put("time", iso.format(Instant.ofEpochMilli(hour * HOUR_MS + HOUR_MS / 2)))
+                put("bpm", Math.round(samples.sumOf { it.bpm } / samples.size * 10.0) / 10.0)
+            })
+        }
+
+        return JSONObject().apply {
+            put("device", deviceName)
+            put("steps", Math.round(source.totalAfter(sinceInterval, SampleStore.DailyField.STEPS)))
+            put("calories", source.totalAfter(sinceInterval, SampleStore.DailyField.CALORIES))
+            put("distanceMeters", source.totalAfter(sinceInterval, SampleStore.DailyField.DISTANCE))
+            // Shortcuts parses ISO 8601 directly; epoch millis would need arithmetic.
+            put("windowStart", iso.format(Instant.ofEpochMilli(range?.first ?: nowFloor())))
+            put("windowEnd", iso.format(Instant.ofEpochMilli(range?.second ?: System.currentTimeMillis())))
+            put("heartRate", hourly)
+            // Echoed back to /ack once the Shortcut has logged everything.
+            put("cursorInterval", source.maxIntervalId())
+            put("cursorHeartRate", heartRate.lastOrNull()?.epochMillis ?: sinceHeart)
+            put("hasData", range != null || hourly.length() > 0)
+        }.toString()
+    }
+
+    private fun nowFloor() = System.currentTimeMillis()
 
     private fun parseQuery(raw: String): Map<String, String> =
         raw.split('&')
             .filter { it.contains('=') }
             .associate { pair ->
-                val k = URLDecoder.decode(pair.substringBefore('='), "UTF-8")
-                val v = URLDecoder.decode(pair.substringAfter('='), "UTF-8")
-                k to v
+                URLDecoder.decode(pair.substringBefore('='), "UTF-8") to
+                    URLDecoder.decode(pair.substringAfter('='), "UTF-8")
             }
 
     private fun errorBody(message: String) = JSONObject().put("error", message).toString()
@@ -211,8 +278,9 @@ class SyncHttpServer(
     }
 
     companion object {
-        const val PROTOCOL_VERSION = 1
+        const val PROTOCOL_VERSION = 2
         const val DEFAULT_PORT = 8787
+        private const val HOUR_MS = 3_600_000L
         private const val TAG = "SyncHttpServer"
     }
 }

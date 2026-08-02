@@ -11,6 +11,8 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import java.net.Inet4Address
+import java.net.NetworkInterface
 
 /**
  * Minimal watch UI. Its only jobs are to obtain sensor permissions, start
@@ -23,6 +25,7 @@ import androidx.core.content.ContextCompat
 class MainActivity : Activity() {
 
     private lateinit var codeView: TextView
+    private lateinit var addressView: TextView
 
     private val requiredPermissions: Array<String>
         get() = buildList {
@@ -73,7 +76,25 @@ class MainActivity : Activity() {
         super.onResume()
         Pairing.pairingWindowOpen = true
         codeView.text = Pairing.pairingCode(this)
+        // Apple Shortcuts has no Bonjour support, so the shortcut has to address
+        // the watch by IP. Showing it here saves digging through Wi-Fi settings.
+        addressView.text = localAddress()?.let { "$it:${SyncHttpServer.DEFAULT_PORT}" }
+            ?: "Wi-Fi not connected"
     }
+
+    /**
+     * First non-loopback IPv4 address. Enumerating interfaces rather than using
+     * WifiManager.connectionInfo, which is deprecated and returns 0 on newer
+     * Wear builds.
+     */
+    private fun localAddress(): String? =
+        runCatching {
+            NetworkInterface.getNetworkInterfaces().toList()
+                .filter { it.isUp && !it.isLoopback }
+                .flatMap { it.inetAddresses.toList() }
+                .firstOrNull { !it.isLoopbackAddress && it is Inet4Address }
+                ?.hostAddress
+        }.getOrNull()
 
     override fun onPause() {
         Pairing.pairingWindowOpen = false
@@ -96,11 +117,12 @@ class MainActivity : Activity() {
             gravity = Gravity.CENTER
         }
         root.addView(codeView)
-        root.addView(TextView(this).apply {
-            text = "Enter on iPhone"
-            textSize = 10f
+        addressView = TextView(this).apply {
+            textSize = 11f
             gravity = Gravity.CENTER
-        })
+            setPadding(0, 12, 0, 0)
+        }
+        root.addView(addressView)
         return root
     }
 

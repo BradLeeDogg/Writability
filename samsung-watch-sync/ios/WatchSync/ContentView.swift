@@ -58,9 +58,9 @@ final class SyncViewModel: ObservableObject {
             status = "Writing to Health…"
             let written = try await writer.commit(response)
 
-            // Only now is it safe to advance: everything in this response is in
-            // HealthKit, so the next request can start after it.
-            client.watermark = response.watermark
+            // Only now is it safe to acknowledge: everything in this response is
+            // in HealthKit, so the watch may retire it.
+            try await client.acknowledge(response, at: resolved.baseURL)
 
             status = written == 0
                 ? "Up to date"
