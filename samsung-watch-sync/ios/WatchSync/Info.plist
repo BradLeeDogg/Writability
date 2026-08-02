@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- iOS 14+ blocks local network access, including Bonjour browsing, until
+         the user grants it. Without both of these keys the browser silently
+         returns nothing and the watch appears to be missing. -->
+    <key>NSLocalNetworkUsageDescription</key>
+    <string>WatchSync connects directly to your watch on your Wi-Fi network to copy health data to this phone.</string>
+
+    <key>NSBonjourServices</key>
+    <array>
+        <string>_watchsync._tcp</string>
+    </array>
+
+    <!-- HealthKit. Only the update string is strictly needed since this app
+         never reads, but Xcode's validation is happier with both present. -->
+    <key>NSHealthUpdateUsageDescription</key>
+    <string>WatchSync writes heart rate, steps, active energy and distance from your watch into Apple Health.</string>
+    <key>NSHealthShareUsageDescription</key>
+    <string>WatchSync checks existing entries so it can replace its own previous daily totals instead of duplicating them.</string>
+
+    <!-- App Transport Security blocks plain HTTP by default. The watch serves
+         over http on the LAN, so allow local networking specifically. This does
+         not weaken ATS for anything routed off the local network. -->
+    <key>NSAppTransportSecurity</key>
+    <dict>
+        <key>NSAllowsLocalNetworking</key>
+        <true/>
+    </dict>
+</dict>
+</plist>

@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-feature android:name="android.hardware.type.watch" />
+
+    <!-- Health Services sensor access -->
+    <uses-permission android:name="android.permission.BODY_SENSORS" />
+    <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />
+    <!-- Required from API 33 for passive collection while the app is backgrounded -->
+    <uses-permission android:name="android.permission.BODY_SENSORS_BACKGROUND" />
+
+    <!-- LAN server + mDNS advertisement -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+    <!-- Foreground service keeps the socket alive against Wear power management -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_HEALTH" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+
+    <application
+        android:allowBackup="false"
+        android:label="WatchSync"
+        android:supportsRtl="true">
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:label="WatchSync">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <service
+            android:name=".SyncService"
+            android:exported="false"
+            android:foregroundServiceType="health" />
+
+        <!-- Health Services delivers passive data points here, even if the
+             app process was killed; the system restarts it. -->
+        <service
+            android:name=".HealthCollectorService"
+            android:exported="true"
+            android:permission="com.google.android.wearable.healthservices.permission.PASSIVE_DATA_BINDING" />
+
+    </application>
+</manifest>
