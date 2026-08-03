@@ -108,6 +108,12 @@ cd wear
 ./gradlew :app:assembleDebug          # gradlew.bat on Windows
 ```
 
+The wrapper is committed, so this pulls its own Gradle (8.9) and needs only a JDK
+(17–21) on the machine. Everything else — the Android SDK, the platform and build
+tools — comes from Android Studio, which is where `local.properties` or
+`ANDROID_HOME` gets pointed at your SDK. Opening `wear/` in Android Studio and
+letting it sync is the least fiddly route.
+
 On the watch, enable developer access — no phone needed:
 
 1. Settings → About watch → Software → tap **Software version** seven times
@@ -161,7 +167,8 @@ duplicate window, and the Shortcut aggregation.
 
 `verify_splits.py` covers run analysis — split derivation at constant and varying
 pace, boundary interpolation under coarse sampling, partial final splits, pauses,
-mile splits, per-split heart rate, and the structure of the generated TCX:
+mile splits, per-split heart rate, GPS acquisition delay, and the structure of the
+generated TCX:
 
 ```
 $ python3 verify_splits.py
@@ -179,10 +186,33 @@ sample instead of interpolating would place it at 1200 m and report 6:00/km for 
 5:00/km effort. The last check caught a real bug — trackpoints on a lap boundary
 were being emitted in two laps, which would have inflated distance for importers.
 
-**Neither app has been compiled.** They were written on Linux without the Android
-SDK or Xcode, so expect to fix small things on first build — most likely the
-Health Services generics in `HealthCollectorService.kt`, whose exact shape moved
-between library versions and is pinned here to `1.0.0-rc02`.
+The GPS-delay test caught another. Health Services delivers nothing until the fix
+lands, so the first sample can arrive several seconds in and already some metres
+along. `Splits.compute` timed the opening split from that first sample, silently
+dropping the seconds before it: a first kilometre that really took 304 s was
+reported as 296. It now takes the run's own start as the origin, which is what
+the TCX `<Id>` already carried.
+
+### The TCX contract, checked end to end
+
+`Splits.kt` and `TcxWriter.kt` have no Android imports, so they compile and run on
+a plain JVM. Doing that against synthetic runs — clean, GPS-delayed, and one
+ending mid-kilometre — and feeding the resulting TCX into the phone app's own
+importer confirms the two agree: 5:00 splits read back as 5:00, and the delayed
+run reads 5:04 on both sides once the origin fix is in. Before the fix the watch
+said 4:56 and the phone said 5:04 for the same run.
+
+One difference remains by design: the watch emits a trailing partial split (5.4 km
+gives six laps, the last 400 m) while the phone app reports only whole kilometres
+(five). Neither is wrong; the tail simply does not appear in the phone's split
+list.
+
+**Neither app has been compiled as an APK.** The Kotlin above runs on the JVM, but
+the Android build needs `dl.google.com`, which serves both the SDK packages and —
+via Gradle's `google()` repository — the Android Gradle Plugin itself. Expect to
+fix small things on first build, most likely the Health Services generics in
+`HealthCollectorService.kt`, whose exact shape moved between library versions and
+is pinned here to `1.0.0-rc02`.
 
 ## Layout
 

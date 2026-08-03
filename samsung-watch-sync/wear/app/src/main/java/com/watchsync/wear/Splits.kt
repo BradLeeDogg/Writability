@@ -23,15 +23,26 @@ object Splits {
     /**
      * @param points cumulative-distance trackpoints in ascending time order
      * @param splitMeters boundary spacing, e.g. [KILOMETRE]
+     * @param originMillis when the run actually began. The first sample often
+     *   lands several seconds in and already some distance along, while GPS is
+     *   still settling; timing the opening split from that sample drops
+     *   everything before it and reports a first kilometre that is too fast by
+     *   however long the lock took. Ignored if it is later than the first
+     *   sample, so a bad clock cannot stretch the split instead.
      */
-    fun compute(points: List<Trackpoint>, splitMeters: Double): List<Split> {
+    fun compute(
+        points: List<Trackpoint>,
+        splitMeters: Double,
+        originMillis: Long? = null
+    ): List<Split> {
         if (points.size < 2 || splitMeters <= 0) return emptyList()
 
         val totalDistance = points.last().distanceMeters
         if (totalDistance <= 0) return emptyList()
 
         val splits = mutableListOf<Split>()
-        var splitStartTime = points.first().epochMillis
+        var splitStartTime = originMillis?.takeIf { it <= points.first().epochMillis }
+            ?: points.first().epochMillis
         var splitStartDistance = 0.0
         var boundary = splitMeters
         var cursor = 1

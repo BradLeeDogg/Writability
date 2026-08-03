@@ -232,7 +232,8 @@ class SyncHttpServer(
      */
     private fun runDetailBody(run: Run, splitMeters: Double): String {
         val points = runs.trackpoints(run.id)
-        val splits = Splits.compute(points, splitMeters)
+        // Same origin as the TCX, so the watch's own table and the exported file agree.
+        val splits = Splits.compute(points, splitMeters, run.startedAt)
 
         val array = JSONArray()
         splits.forEach { split ->
