@@ -52,7 +52,7 @@ def build(index, points, start_t, end_t, distance, partial=False):
     }
 
 
-def compute(points, split_meters):
+def compute(points, split_meters, origin_ms=None):
     if len(points) < 2 or split_meters <= 0:
         return []
     total = points[-1].distance
@@ -60,7 +60,12 @@ def compute(points, split_meters):
         return []
 
     splits = []
-    split_start_time = points[0].t
+    # The first sample can land seconds into the run and already some distance
+    # along, while GPS settles. Timing the opening split from that sample drops
+    # everything before it. Ignored if later than the first sample, so a bad
+    # clock cannot stretch the split instead.
+    split_start_time = (origin_ms if origin_ms is not None and origin_ms <= points[0].t
+                        else points[0].t)
     split_start_distance = 0.0
     boundary = split_meters
     cursor = 1
@@ -159,6 +164,42 @@ pts = ([Point(p.t, p.distance, 140) for p in steady_run(300.0, 1000.0)]
 s = compute(pts, KM)
 check("split 1 average bpm", s[0]["avg_bpm"], 140.0, tolerance=1.0)
 check("split 2 average bpm", s[1]["avg_bpm"], 170.0, tolerance=1.0)
+
+
+# 9. GPS acquisition delay. Health Services delivers nothing until the fix
+#    lands, so the first sample can arrive several seconds in and already some
+#    metres along. Timing the opening split from that sample drops the missing
+#    seconds and reports a first kilometre that is too fast — and disagrees with
+#    the phone app, which times splits from the TCX <Id> instead.
+#
+#    Here: the run starts at t=0, the first sample lands at t=8 s and 12 m, and
+#    the remaining 988 m is run at 5:00/km (296.4 s). The true first kilometre
+#    therefore took 8 + 296.4 = 304.4 s.
+delayed = [Point(8_000 + p.t, 12.0 + p.distance, 150)
+           for p in steady_run(300.0, 988.0, sample_s=1)]
+delayed.append(Point(delayed[-1].t + 1000, 1400.0, 150))   # keep running past 1 km
+
+no_origin = compute(delayed, KM)
+check("without an origin the first km is short", no_origin[0]["pace_s_per_km"], 296.4,
+      tolerance=1.5)
+
+with_origin = compute(delayed, KM, origin_ms=0)
+check("origin restores the opening split", with_origin[0]["pace_s_per_km"], 304.4,
+      tolerance=1.5)
+check("later splits are untouched by the origin",
+      len(with_origin), len(no_origin))
+
+# An origin after the first sample is nonsense and must be ignored rather than
+# used to inflate the split.
+late = compute(delayed, KM, origin_ms=50_000)
+check("an origin later than the first sample is ignored",
+      late[0]["pace_s_per_km"], no_origin[0]["pace_s_per_km"], tolerance=0.01)
+
+# A run whose first sample really is at zero must be unaffected either way.
+clean = steady_run(300.0, 2000.0)
+check("a clean start is identical with and without an origin",
+      compute(clean, KM, origin_ms=0)[0]["pace_s_per_km"],
+      compute(clean, KM)[0]["pace_s_per_km"], tolerance=0.01)
 
 
 # --- TCX structure ---------------------------------------------------------

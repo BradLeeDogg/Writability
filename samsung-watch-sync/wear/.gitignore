@@ -1,0 +1,15 @@
+# Gradle build state — not the wrapper, which is committed deliberately so the
+# documented ./gradlew build works on a clean checkout.
+.gradle/
+build/
+app/build/
+
+# Points at a machine's own Android SDK; never shared.
+local.properties
+
+# Android Studio
+.idea/
+*.iml
+captures/
+.externalNativeBuild/
+.cxx/

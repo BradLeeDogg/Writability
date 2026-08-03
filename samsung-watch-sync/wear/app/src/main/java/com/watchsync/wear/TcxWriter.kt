@@ -21,7 +21,8 @@ object TcxWriter {
     private val iso: DateTimeFormatter = DateTimeFormatter.ISO_INSTANT
 
     fun write(run: Run, points: List<Trackpoint>, splitMeters: Double = Splits.KILOMETRE): String {
-        val splits = Splits.compute(points, splitMeters)
+        // Time splits from the run's own start, not the first sample — see Splits.compute.
+        val splits = Splits.compute(points, splitMeters, run.startedAt)
         val sb = StringBuilder(points.size * 180)
 
         sb.append("""<?xml version="1.0" encoding="UTF-8"?>""").append('\n')
