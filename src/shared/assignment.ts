@@ -218,6 +218,38 @@ function splitSentences(text: string): string[] {
     .filter(Boolean)
 }
 
+const MAX_REQUIREMENTS = 20
+
+// Phrases that mark an instruction worth pulling out of plain prose.
+const REQUIRE_RE =
+  /\b(must|should|need to|needs? to|be sure to|make sure|required to|ensure that|do not|don't|avoid|remember to)\b/i
+// A bullet / numbered / lettered list marker at the start of a line.
+const BULLET_RE = /^\s*(?:[-*•▪◦·–—]+|\(?\d{1,2}[.)]|[A-Za-z][.)])\s+/
+// A points / marks / percentage weight, the tell-tale sign of a rubric row.
+const POINTS_RE = /(\d{1,3})\s*(?:points?|pts?|marks?)\b|\b(\d{1,3})\s*%/i
+// Imperative verbs that commonly open a requirement line.
+const VERB_START_RE =
+  /^(include|use|write|cite|add|provide|discuss|analy[sz]e|explain|describe|argue|compare|contrast|address|submit|ensure|incorporate|support|develop|organi[sz]e|format|proofread|reference|quote|summari[sz]e|evaluate|identify|state|define|create|choose|select|introduce|present|demonstrate|answer|complete|follow)\b/i
+
+function ensureEnd(s: string): string {
+  return /[.!?)]$/.test(s) ? s : s + '.'
+}
+function capitalizeFirst(s: string): string {
+  return s ? s[0].toUpperCase() + s.slice(1) : s
+}
+/** A short heading that introduces a grading rubric / criteria section. */
+function isRubricHeading(line: string): boolean {
+  const head =
+    /^(rubric|grading(?:\s+criteria)?|criteria|assessment(?:\s+criteria)?|marking(?:\s+(?:criteria|scheme))?|scoring|points?\s+breakdown|grade\s+breakdown|you(?:'|’)?ll\s+be\s+(?:graded|assessed|marked)|how\s+you(?:'|’)?ll\s+be\s+(?:graded|assessed)|what\s+(?:i(?:'|’)?m|we(?:'|’)?re)\s+looking\s+for)\b/i
+  if (!head.test(line.trim())) return false
+  return line.trim().length <= 48 || /:\s*$/.test(line)
+}
+/** A flattened blob of bullet rows (so the prose pass can skip it). */
+function looksLikeListBlob(sentence: string): boolean {
+  if (/[•▪◦·]|(?:^|\s)[-–—]\s/.test(sentence)) return true
+  return (sentence.match(/\b(points?|pts?|marks?)\b/gi) ?? []).length >= 2
+}
+
 /** Pull concrete, checkable requirements out of the prompt text. */
 export function extractRequirements(prompt: string): string[] {
   const text = prompt || ''
@@ -280,16 +312,38 @@ export function extractRequirements(prompt: string): string[] {
   ]
   for (const [re, line] of flags) if (re.test(text)) push(line)
 
-  // Explicit "must / should / be sure to" instructions, kept as written.
+  // Plain-prose "must / should / be sure to" instructions, kept as written.
+  // Skip flattened bullet blobs — those are handled line-by-line below.
   for (const sentence of splitSentences(text)) {
-    if (out.length >= 14) break
-    if (sentence.length > 180) continue
-    if (/\b(must|should|need to|needs? to|be sure to|make sure|required to|ensure that|do not|don't|avoid|remember to)\b/i.test(sentence)) {
-      push(sentence.endsWith('.') || sentence.endsWith('!') ? sentence : sentence + '.')
-    }
+    if (out.length >= MAX_REQUIREMENTS) break
+    if (sentence.length > 180 || looksLikeListBlob(sentence)) continue
+    if (REQUIRE_RE.test(sentence)) push(ensureEnd(sentence))
   }
 
-  return out.slice(0, 14)
+  // Bullet points, rubric rows, and imperative lines. These are the heart of a
+  // rubric and used to be lost when they weren't full "must/should" sentences.
+  const lines = text.split(/\r?\n/)
+  let inRubric = false
+  for (const raw of lines) {
+    if (out.length >= MAX_REQUIREMENTS) break
+    const line = raw.trim()
+    if (!line) continue
+    if (isRubricHeading(line)) {
+      inRubric = true
+      continue
+    }
+    const isBullet = BULLET_RE.test(raw)
+    const body = line.replace(BULLET_RE, '').trim()
+    if (body.length < 3 || body.length > 180) continue
+    const hasPoints = POINTS_RE.test(body)
+    // Only act on list-like lines; plain prose lines were handled above.
+    if (!isBullet && !hasPoints && !inRubric) continue
+    if (!(isBullet || hasPoints || VERB_START_RE.test(body) || REQUIRE_RE.test(body))) continue
+    if (inRubric || hasPoints) push('Graded on: ' + capitalizeFirst(body))
+    else push(ensureEnd(capitalizeFirst(body)))
+  }
+
+  return out.slice(0, MAX_REQUIREMENTS)
 }
 
 export function decodeAssignment(prompt: string): DecodeResult {
@@ -297,4 +351,51 @@ export function decodeAssignment(prompt: string): DecodeResult {
     commandWords: findCommandWords(prompt),
     requirements: extractRequirements(prompt)
   }
+}
+
+// --- The vague-prompt bridge -------------------------------------------------
+// When a prompt has instruction words but almost no concrete requirements
+// ("Discuss the role of memory in Beloved."), these are the unstated
+// expectations of college writing, phrased literally. Offline, no AI.
+
+export interface ExpectationItem {
+  text: string
+  why: string
+  /** True when the honest answer is "ask your teacher" — adding it also gives
+   *  the student a ready-to-send question. */
+  ask?: boolean
+  question?: string
+}
+
+export const UNSTATED_EXPECTATIONS: ExpectationItem[] = [
+  {
+    text: 'Take one clear position (an arguable thesis).',
+    why: 'At college, "discuss" and "analyze" still expect you to argue one main idea, not just describe.'
+  },
+  {
+    text: 'Back every point with evidence from the text or a source.',
+    why: 'Statements without evidence read as opinion and lose marks.'
+  },
+  {
+    text: 'Cite every quote and idea that is not yours.',
+    why: 'Citations are expected even when the prompt does not mention them.'
+  },
+  {
+    text: 'Find out the expected length.',
+    why: 'The prompt does not say. It is normal and fine to ask.',
+    ask: true,
+    question: 'Could you tell me the expected length for this paper?'
+  },
+  {
+    text: 'Find out how many sources are expected.',
+    why: 'The prompt does not say. It is normal and fine to ask.',
+    ask: true,
+    question: 'Could you tell me how many sources you expect us to use?'
+  }
+]
+
+/** Show the bridge when instruction words were found but the prompt yielded
+ *  almost nothing concrete — the "vague prompt" case. */
+export function needsExpectationsBridge(result: DecodeResult): boolean {
+  return result.commandWords.length > 0 && result.requirements.length < 2
 }

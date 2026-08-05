@@ -15,6 +15,7 @@ import type {
   ExportFormat,
   Paper,
   PaperContent,
+  PaperFormat,
   PaperMeta,
   PaperSummary
 } from './types'
@@ -22,6 +23,9 @@ import type {
 export interface CreatePaperInput {
   title: string
   essayType: EssayType
+  format?: PaperFormat
+  /** Start lean: same structure, no writing prompts (scaffolding fade). */
+  lean?: boolean
 }
 
 export interface SavePaperInput {
@@ -91,6 +95,26 @@ export interface WritabilityApi {
   openPaper(id: string): Promise<Paper | null>
   savePaper(input: SavePaperInput): Promise<SavePaperResult>
   deletePaper(id: string): Promise<{ ok: boolean }>
+  /** Papers in the trash (recently deleted), newest first. */
+  listTrash(): Promise<PaperSummary[]>
+  /** Bring a trashed paper back into the library. */
+  restorePaper(id: string): Promise<{ ok: boolean }>
+  /** Emergency plain-text save of the current document (save dialog). */
+  rescueText(title: string, text: string): Promise<{ ok: boolean; canceled?: boolean; path?: string }>
+  /** Quiet per-paper history: take/list/restore content snapshots. */
+  takeSnapshot(id: string): Promise<{ file: string; at: string; words: number } | null>
+  listSnapshots(id: string): Promise<{ file: string; at: string; words: number }[]>
+  restoreSnapshot(id: string, file: string): Promise<{ ok: boolean }>
+  /** Import a .docx as a new paper's content, with an honest fidelity report. */
+  importDocx(): Promise<{
+    ok: boolean
+    canceled?: boolean
+    error?: string
+    title?: string
+    html?: string
+    kept?: string[]
+    dropped?: string[]
+  }>
 
   // Settings --------------------------------------------------------------
   getSettings(): Promise<AppSettings>
@@ -109,6 +133,20 @@ export interface WritabilityApi {
   /** Run an opt-in AI task with the student's own key. Offline-safe: returns a
    *  friendly error if no key is set. Never called unless the student clicks. */
   runAi(input: AiRunInput): Promise<AiRunResult>
+
+  // Files -----------------------------------------------------------------
+  /** Reveal an exported file in the OS file manager. */
+  revealFile(path: string): Promise<void>
+  /** Open an exported file with its default app. */
+  openFile(path: string): Promise<void>
+
+  // Lifecycle ---------------------------------------------------------------
+  /** Main asks the renderer to flush unsaved work before the window closes. */
+  onFlushRequest(cb: () => void): void
+  /** Renderer tells main the flush finished and the window may close. */
+  flushDone(): void
+  /** Fires once when a background update has downloaded (Windows builds). */
+  onUpdateReady(cb: (version: string) => void): void
 
   // Misc ------------------------------------------------------------------
   getAppInfo(): Promise<AppInfo>

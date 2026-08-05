@@ -24,6 +24,12 @@ export function Toolbar(): JSX.Element {
   const boardOpen = useStore((s) => s.boardOpen)
   const toggleBoard = useStore((s) => s.toggleBoard)
   const exportCurrent = useStore((s) => s.exportCurrent)
+  const showToast = useStore((s) => s.showToast)
+  const saveFails = useStore((s) => s.saveFails)
+  const rescueCopy = useStore((s) => s.rescueCopy)
+  const saveNow = useStore((s) => s.save)
+  const setMeta = useStore((s) => s.setMeta)
+  const stage = current.meta.stage ?? 'polish'
 
   const [exporting, setExporting] = useState(false)
 
@@ -31,8 +37,15 @@ export function Toolbar(): JSX.Element {
     setExporting(true)
     try {
       const res = await exportCurrent(format)
-      if (!res.ok && !res.canceled) {
-        alert(`Export failed: ${res.error ?? 'unknown error'}`)
+      if (res.ok && res.path) {
+        const path = res.path
+        const name = path.split(/[\\/]/).pop() ?? path
+        showToast(`Saved ${name}`, [
+          { label: 'Open', run: () => void window.api.openFile(path) },
+          { label: 'Show in folder', run: () => void window.api.revealFile(path) }
+        ])
+      } else if (!res.ok && !res.canceled) {
+        showToast(`The export did not finish: ${res.error ?? 'unknown error'}. Nothing was lost — try again.`)
       }
     } finally {
       setExporting(false)
@@ -52,9 +65,46 @@ export function Toolbar(): JSX.Element {
           onChange={(e) => setTitle(e.target.value)}
         />
         <span className="essay-type">{ESSAY_TYPE_LABELS[current.meta.essayType]}</span>
-        <span className={'save-state ' + saveState} aria-live="polite">
-          {SAVE_LABELS[saveState]}
-        </span>
+        <div className="stage-toggle" role="group" aria-label="Writing stage">
+          <button
+            className={'stage-btn' + (stage === 'draft' ? ' active' : '')}
+            data-testid="stage-draft"
+            aria-pressed={stage === 'draft'}
+            title="Drafting: spelling and review marks wait until you're ready"
+            onClick={() => setMeta({ stage: 'draft' })}
+          >
+            Draft
+          </button>
+          <button
+            className={'stage-btn' + (stage === 'polish' ? ' active' : '')}
+            data-testid="stage-polish"
+            aria-pressed={stage === 'polish'}
+            title="Polishing: show spelling and review marks"
+            onClick={() => setMeta({ stage: 'polish' })}
+          >
+            Polish
+          </button>
+        </div>
+        {saveState === 'error' ? (
+          <span className="save-state error" aria-live="polite">
+            Not saved —{' '}
+            <button className="link-btn" data-testid="save-retry" onClick={() => void saveNow()}>
+              Try again
+            </button>
+            {saveFails >= 2 && (
+              <>
+                {' · '}
+                <button className="link-btn" data-testid="save-rescue" onClick={() => void rescueCopy()}>
+                  Save a copy…
+                </button>
+              </>
+            )}
+          </span>
+        ) : (
+          <span className={'save-state ' + saveState} aria-live="polite">
+            {SAVE_LABELS[saveState]}
+          </span>
+        )}
       </div>
 
       <div className="toolbar-right">

@@ -24,6 +24,7 @@ const GROUP_ORDER: ClarityIssueType[] = [
 ]
 
 export function ClarityPanel(): JSX.Element {
+  const stage = useStore((s) => s.current?.meta.stage ?? 'polish')
   const current = useStore((s) => s.current)!
   const report = useMemo(
     () => analyzeClarity(docToPlainText(current.content.doc)),
@@ -39,6 +40,17 @@ export function ClarityPanel(): JSX.Element {
     }
     return map
   }, [report])
+
+  if (stage === 'draft') {
+    return (
+      <div className="clarity" data-testid="clarity-panel">
+        <p className="panel-intro" data-testid="clarity-drafting">
+          You’re drafting — clarity notes wait until you switch to <strong>Polish</strong> (top
+          left). First drafts are allowed to be rough.
+        </p>
+      </div>
+    )
+  }
 
   return (
     <div className="clarity" data-testid="clarity-panel">

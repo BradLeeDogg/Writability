@@ -165,18 +165,82 @@ function chicagoReference(s: CitationSource): string {
 
 // --- In-text markers --------------------------------------------------------
 
-function inText(s: CitationSource, style: CitationStyle): string {
-  const who = inTextAuthor(s, style)
-  if (style === 'mla') {
-    return `(${join([who, s.pages]).trim()})`
-  }
-  if (style === 'apa') {
-    const page = s.pages ? `, p. ${s.pages}` : ''
-    return `(${who}, ${s.year || 'n.d.'}${page})`
-  }
-  const page = s.pages ? `, ${s.pages}` : ''
-  return `(${who} ${s.year || 'n.d.'}${page})`
+/**
+ * How the marker sits in the sentence.
+ * - `parenthetical`: everything in brackets — "(Smith 42)".
+ * - `narrative`: the author is part of the prose, the rest is bracketed —
+ *   "Smith (42) argues that…".
+ */
+export type CiteForm = 'parenthetical' | 'narrative'
+
+export interface InTextOptions {
+  /**
+   * The page (or page range) this particular quote came from. This is *not*
+   * the source's `pages` field — that is the whole work's extent and belongs
+   * only in the reference list. Blank is valid: a paraphrase of a whole work,
+   * or a source with no pagination, takes no locator.
+   */
+  page?: string
+  form?: CiteForm
 }
+
+/** Locator text for an in-text marker. APA is the only style that writes "p."/"pp.". */
+function locatorFor(page: string | undefined, style: CitationStyle): string {
+  // Tolerate students typing "p. 42" or "pages 42-45" — we add the label back.
+  const p = (page ?? '').trim().replace(/^(pp?\.|pages?)\s*/i, '').trim()
+  if (!p) return ''
+  if (style !== 'apa') return p
+  const spansSeveral = /[-–—,\s]/.test(p)
+  return `${spansSeveral ? 'pp.' : 'p.'} ${p}`
+}
+
+/**
+ * Build the in-text marker for one specific citation. Unlike the reference
+ * entry, this needs to know *where in the source* the student is pointing, so
+ * the page is passed per citation rather than read off the source.
+ */
+export function inTextCitation(
+  source: CitationSource,
+  style: CitationStyle,
+  opts: InTextOptions = {}
+): string {
+  const who = inTextAuthor(source, style)
+  const loc = locatorFor(opts.page, style)
+  const narrative = opts.form === 'narrative'
+
+  if (style === 'mla') {
+    if (narrative) return loc ? `${who} (${loc})` : who
+    return `(${join([who, loc]).trim()})`
+  }
+
+  const year = source.year || 'n.d.'
+  const inner = loc ? `${year}, ${loc}` : year
+  if (narrative) return `${who} (${inner})`
+  return style === 'apa' ? `(${who}, ${inner})` : `(${who} ${inner})`
+}
+
+function inText(s: CitationSource, style: CitationStyle): string {
+  return inTextCitation(s, style)
+}
+
+/**
+ * Sentence frames for narrative citations. Knowing *how* to introduce a source
+ * is the part students get stuck on far more often than the brackets, so the
+ * marker can be dropped into a ready-made frame: `before` + marker + `after`.
+ */
+export interface SignalPhrase {
+  label: string
+  before: string
+  after: string
+}
+
+export const SIGNAL_PHRASES: SignalPhrase[] = [
+  { label: 'According to …', before: 'According to ', after: ', ' },
+  { label: '… argues that', before: '', after: ' argues that ' },
+  { label: '… explains that', before: '', after: ' explains that ' },
+  { label: '… found that', before: '', after: ' found that ' },
+  { label: 'As … puts it,', before: 'As ', after: ' puts it, ' }
+]
 
 export function formatCitation(source: CitationSource, style: CitationStyle): FormattedCitation {
   let reference: string
@@ -193,6 +257,44 @@ export function formatCitation(source: CitationSource, style: CitationStyle): Fo
       break
   }
   return { inText: inText(source, style), reference }
+}
+
+/** A reference split into styled runs so titles can be italicised properly
+ *  (MLA/APA/Chicago all require it). Falls back to one roman segment. */
+export interface ReferenceSegment {
+  text: string
+  italic: boolean
+}
+
+export function referenceSegments(source: CitationSource, style: CitationStyle): ReferenceSegment[] {
+  const reference = formatCitation(source, style).reference
+  // What gets italicised: a book's title; otherwise the container (journal/site).
+  const italicised: string[] = []
+  if (source.type === 'book' && source.title) italicised.push(source.title)
+  else if (source.containerTitle) italicised.push(source.containerTitle)
+  if (style === 'apa' && source.type === 'journal' && source.volume) italicised.push(source.volume)
+
+  let segments: ReferenceSegment[] = [{ text: reference, italic: false }]
+  for (const target of italicised) {
+    const next: ReferenceSegment[] = []
+    for (const seg of segments) {
+      if (seg.italic) {
+        next.push(seg)
+        continue
+      }
+      const i = seg.text.indexOf(target)
+      if (i === -1) {
+        next.push(seg)
+        continue
+      }
+      if (i > 0) next.push({ text: seg.text.slice(0, i), italic: false })
+      next.push({ text: target, italic: true })
+      if (i + target.length < seg.text.length)
+        next.push({ text: seg.text.slice(i + target.length), italic: false })
+    }
+    segments = next
+  }
+  return segments
 }
 
 export const CITATION_STYLE_LABELS: Record<CitationStyle, string> = {

@@ -846,6 +846,27 @@ fieldset.field {
 .lane-card .card-remove {
   flex: 0 0 auto;
 }
+.lane-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 2px 4px 0;
+}
+.lane-grip {
+  cursor: grab;
+  color: rgba(0, 0, 0, 0.4);
+  font-size: 0.95rem;
+  line-height: 1;
+  user-select: none;
+  padding: 0 2px;
+}
+.lane-grip:active {
+  cursor: grabbing;
+}
+.board-column.drag-over {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 2px var(--accent);
+}
 
 /* Immersive "Read to me" overlay */
 .reader-overlay {
@@ -886,18 +907,27 @@ fieldset.field {
   color: var(--text);
 }
 .reader-sentence {
-  border-radius: 5px;
-  padding: 0 2px;
-  cursor: pointer;
+  border-radius: 6px;
   transition: background-color 0.15s ease;
 }
-.reader-sentence:hover {
+/* The line currently being read is gently tinted; the spoken word pops. */
+.reader-sentence.current {
   background: var(--surface-2);
+  box-shadow: 0 0 0 4px var(--surface-2);
 }
-.reader-sentence.active {
+.reader-word {
+  border-radius: 5px;
+  padding: 0 1px;
+  cursor: pointer;
+}
+.reader-word:hover {
+  background: var(--surface);
+  box-shadow: 0 0 0 2px var(--surface);
+}
+.reader-word.active {
   background: var(--accent);
   color: var(--accent-contrast);
-  box-shadow: 0 0 0 3px var(--accent);
+  box-shadow: 0 0 0 2px var(--accent);
 }
 .reader-note {
   text-align: center;
@@ -1095,6 +1125,131 @@ fieldset.field {
   flex: 1;
   overflow-y: auto;
   padding: 2rem 1.5rem 4rem;
+  position: relative;
+}
+/* Gentle spelling marks: soft wavy underlines, not harsh red squiggles. */
+.pm-misspelled {
+  text-decoration: underline wavy var(--danger);
+  text-decoration-skip-ink: none;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.pm-confusable {
+  text-decoration: underline dotted var(--accent);
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.spell-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+}
+.spell-pop {
+  position: fixed;
+  z-index: 41;
+  width: 250px;
+  max-width: 80vw;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: var(--shadow);
+  padding: 0.7rem;
+}
+.spell-word {
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 0.3rem;
+}
+.spell-hint {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  margin: 0 0 0.5rem;
+  line-height: 1.4;
+}
+.spell-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+.spell-suggestions .chip {
+  font-size: 0.9rem;
+  color: var(--text);
+}
+.spell-actions {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.4rem;
+  margin-top: 0.6rem;
+}
+.spell-actions .ghost {
+  font-size: 0.82rem;
+  padding: 3px 8px;
+}
+.my-words {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+  margin: 0.1rem 0 0.3rem;
+}
+.my-words-label {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+.my-words .chip {
+  font-size: 0.82rem;
+}
+
+/* Spelling summary panel */
+.spell-clear {
+  color: var(--accent);
+  font-weight: 600;
+}
+.spell-subhead {
+  margin: 1rem 0 0.4rem;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+.spell-row {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.5rem 0.6rem;
+  margin-bottom: 0.5rem;
+  background: var(--surface);
+}
+.spell-row-head {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  margin-bottom: 0.4rem;
+}
+.spell-row-word {
+  font-weight: 700;
+  color: var(--text);
+}
+.spell-row-count {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+.spell-row .spell-hint {
+  margin: 0 0 0.4rem;
+}
+.ghost-chip {
+  color: var(--text-muted);
+}
+
+/* Reading guide band that tracks the pointer (see Editor.tsx). */
+.reading-ruler {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 1.9em;
+  transform: translateY(-50%);
+  background: var(--ruler-tint);
+  border-top: 1px solid var(--ruler-edge);
+  border-bottom: 1px solid var(--ruler-edge);
+  pointer-events: none;
+  z-index: 4;
 }
 .editor-surface {
   max-width: var(--max-line-width);
@@ -1106,6 +1261,32 @@ fieldset.field {
   padding: 0.35rem 0.8rem;
   font-size: 0.8rem;
   color: var(--text-muted);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 1rem;
+}
+.status-sub {
+  opacity: 0.8;
+}
+
+/* Per-paper details (format + heading) in the Assignment tab */
+.paper-details {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.4rem 0.7rem;
+  margin-bottom: 0.9rem;
+  background: var(--surface);
+}
+.paper-details > summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--text);
+}
+.paper-details[open] > summary {
+  margin-bottom: 0.5rem;
+}
+.paper-details .field {
+  margin-bottom: 0.5rem;
 }
 
 /* Always-visible thesis reminder, docked above the writing area. */
@@ -1152,6 +1333,28 @@ fieldset.field {
   letter-spacing: var(--letter-spacing);
   box-shadow: var(--shadow);
 }
+/* Print layout: show the editor as the page it will export to — a letter-width
+   white sheet, double-spaced, with a first-line indent. Keeps the student's
+   reading font (the export itself uses Times New Roman). */
+:root[data-print-layout='true'] .editor-scroll {
+  background: var(--surface-2);
+}
+:root[data-print-layout='true'] .editor-surface {
+  max-width: 8.5in;
+}
+:root[data-print-layout='true'] .prose {
+  background: var(--print-bg);
+  color: var(--print-text);
+  border-color: var(--border);
+  padding: 1in;
+  line-height: 2;
+  letter-spacing: normal;
+}
+:root[data-print-layout='true'] .prose p {
+  text-indent: 0.5in;
+  margin: 0;
+}
+
 .prose:focus {
   outline: none;
 }
@@ -1468,4 +1671,453 @@ input[type='range'] {
 }
 .toggle input {
   width: auto;
+}
+
+/* In-app notices: one toast, one question dialog (no OS modals) */
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 1.2rem;
+  transform: translateX(-50%);
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  max-width: min(92vw, 560px);
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: var(--shadow);
+  padding: 0.55rem 0.8rem;
+  font-size: 0.9rem;
+}
+.toast-action {
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--accent);
+  border-radius: 6px;
+  padding: 2px 10px;
+  cursor: pointer;
+  font: inherit;
+}
+.toast-close {
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 1rem;
+}
+.notice-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 59;
+  background: rgba(0, 0, 0, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.notice-dialog {
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+  padding: 1.1rem 1.3rem;
+  max-width: min(92vw, 440px);
+}
+.notice-dialog h3 {
+  margin: 0 0 0.4rem;
+}
+.notice-dialog p {
+  margin: 0 0 0.9rem;
+  color: var(--text-muted);
+  line-height: 1.5;
+  white-space: pre-line;
+}
+.notice-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+.danger-btn {
+  background: var(--danger);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 0.4rem 0.9rem;
+  cursor: pointer;
+  font: inherit;
+}
+.link-btn {
+  border: none;
+  background: none;
+  color: var(--accent);
+  text-decoration: underline;
+  cursor: pointer;
+  font: inherit;
+  padding: 0;
+}
+
+/* Find & replace bar */
+.find-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.35rem 0.8rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+.find-bar input {
+  font: inherit;
+  padding: 3px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text);
+  width: 220px;
+}
+.find-count {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  min-width: 5.5em;
+}
+.find-replace summary {
+  cursor: pointer;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+.find-replace[open] {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+.find-replace-row {
+  display: inline-flex;
+  gap: 0.4rem;
+  align-items: center;
+}
+.pm-find {
+  background: var(--selection);
+  border-radius: 3px;
+}
+.pm-find.active {
+  outline: 2px solid var(--accent);
+}
+
+/* Recently deleted */
+.trash-list {
+  margin-top: 1.2rem;
+}
+.trash-list summary {
+  cursor: pointer;
+  color: var(--text-muted);
+}
+
+/* Draft / Polish stage toggle */
+.stage-toggle {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.stage-btn {
+  border: none;
+  border-radius: 0;
+  padding: 0.25rem 0.7rem;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  background: var(--surface);
+}
+.stage-btn.active {
+  background: var(--accent);
+  color: var(--accent-contrast);
+  font-weight: 600;
+}
+
+/* Re-entry welcome-back card */
+.reentry-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+  margin: 0.6rem 0.8rem 0;
+  padding: 0.6rem 0.9rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+}
+.reentry-title {
+  margin: 0 0 0.15rem;
+  font-weight: 600;
+}
+.reentry-line {
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+/* Quick capture bar */
+.capture-bar {
+  padding: 0.35rem 0.8rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+.capture-bar input {
+  width: 100%;
+}
+
+/* Unstated-expectations bridge */
+.expectations {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.6rem 0.8rem;
+  margin: 0.8rem 0;
+  background: var(--surface);
+}
+.expectations h3 {
+  margin: 0 0 0.2rem;
+}
+.expectation-list {
+  list-style: none;
+  margin: 0.4rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+.expectation {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+.expectation-text {
+  margin: 0;
+  font-weight: 600;
+  font-size: 0.92rem;
+}
+.expectation-why {
+  margin: 0.1rem 0 0;
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+
+/* AI-suggested card badge */
+.ai-badge-card {
+  display: block;
+  font-size: 0.68rem;
+  color: rgba(0, 0, 0, 0.55);
+  padding: 2px 6px 0;
+}
+
+/* Paper history */
+.history-list {
+  list-style: none;
+  margin: 0.4rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.history-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  font-size: 0.85rem;
+}
+
+/* AI contract */
+.ai-contract-text {
+  white-space: pre-wrap;
+  font-family: var(--ui-font);
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+.small-toggle span {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+
+/* Collapsed settings groups keep the panel scannable */
+.settings-group {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.45rem 0.7rem;
+  margin: 0.6rem 0;
+  background: var(--surface);
+}
+.settings-group > summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--text);
+}
+.settings-group[open] > summary {
+  margin-bottom: 0.5rem;
+}
+
+/* Footnote markers: numbered automatically with CSS counters */
+.prose {
+  counter-reset: fn;
+}
+.prose sup.fn-ref {
+  counter-increment: fn;
+  cursor: pointer;
+  color: var(--accent);
+  font-weight: 600;
+}
+.prose sup.fn-ref::after {
+  content: counter(fn);
+}
+
+/* Command palette */
+.palette-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  background: rgba(0, 0, 0, 0.3);
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding-top: 12vh;
+}
+.palette {
+  width: min(92vw, 520px);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+  padding: 0.6rem;
+}
+.palette input {
+  margin-bottom: 0.45rem;
+}
+.palette-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 46vh;
+  overflow-y: auto;
+}
+.palette-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border-radius: 6px;
+}
+.palette-item.active {
+  background: var(--surface-2);
+  color: var(--accent);
+}
+.palette-empty {
+  padding: 0.4rem 0.6rem;
+}
+.palette-hint {
+  margin: 0.4rem 0 0;
+  font-size: 0.75rem;
+  text-align: right;
+}
+
+/* Cite popover + lean nudge + re-entry actions */
+.cite-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+.cite-bar input {
+  max-width: 340px;
+}
+.cite-options {
+  display: flex;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
+/* Citation details step: one question at a time, with a live preview */
+.cite-details {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  width: 100%;
+}
+.cite-page-field input {
+  max-width: 340px;
+}
+.cite-form-field legend,
+.cite-frame-field legend {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  padding: 0;
+  margin-bottom: 0.3rem;
+}
+.cite-preview {
+  margin: 0;
+  padding: 0.45rem 0.6rem;
+  border-radius: 8px;
+  background: var(--surface-2, rgba(127, 127, 127, 0.08));
+  border: 1px solid var(--border);
+}
+.cite-preview-text {
+  font-weight: 600;
+}
+
+/* In-text citation markers: visibly one object, not loose characters */
+.prose span.cite-ref {
+  cursor: pointer;
+  border-radius: 4px;
+  padding: 0 0.12em;
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  box-shadow: inset 0 -1px 0 color-mix(in srgb, var(--accent) 45%, transparent);
+  white-space: nowrap;
+}
+.prose span.cite-ref:hover {
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+}
+.prose span.cite-ref.ProseMirror-selectednode {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* Paste guard: an offer, never a block */
+.paste-cite-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+.paste-cite-text {
+  flex: 1 1 16rem;
+}
+
+/* "Have I actually cited this?" */
+.used-summary {
+  margin: 0 0 0.5rem;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+.used-badge {
+  margin-left: 0.5rem;
+  padding: 0.05rem 0.4rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
+  color: var(--text);
+  white-space: nowrap;
+}
+.used-badge.unused {
+  background: transparent;
+  border: 1px dashed var(--border);
+  color: var(--text-muted);
+}
+.lean-nudge {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin: 0.2rem 0 0.6rem;
+}
+.reentry-actions {
+  display: flex;
+  gap: 0.4rem;
+  flex-shrink: 0;
 }

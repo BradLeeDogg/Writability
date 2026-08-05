@@ -8,6 +8,8 @@ import { ToolsPanel } from './components/ToolsPanel'
 import { Board } from './components/Board'
 import { ReadAloudOverlay } from './components/ReadAloudOverlay'
 import { Welcome } from './components/Welcome'
+import { Notices } from './components/Notices'
+import { CommandPalette } from './components/CommandPalette'
 
 export default function App(): JSX.Element {
   const ready = useStore((s) => s.ready)
@@ -25,8 +27,28 @@ export default function App(): JSX.Element {
     void init()
   }, [init])
 
-  // Best-effort flush of pending edits when the window is closing.
+  // Quiet snapshot every 20 minutes while a paper is open (plus the one taken
+  // on open) so long sessions leave a trail too.
   useEffect(() => {
+    const id = current?.meta.id
+    if (!id) return
+    const timer = setInterval(() => {
+      void window.api.takeSnapshot(id)
+    }, 20 * 60 * 1000)
+    return () => clearInterval(timer)
+  }, [current?.meta.id])
+
+  // Quit-safe saving: main intercepts the window close and waits for this
+  // flush to finish (see src/main/index.ts). beforeunload stays as a backup.
+  useEffect(() => {
+    window.api.onUpdateReady((version) => {
+      useStore
+        .getState()
+        .showToast(`An update (${version}) is ready. It installs itself the next time you close the app.`)
+    })
+    window.api.onFlushRequest(() => {
+      void save().finally(() => window.api.flushDone())
+    })
     const flush = (): void => {
       void save()
     }
@@ -51,6 +73,8 @@ export default function App(): JSX.Element {
     return (
       <div className="app" data-testid="app">
         {showWelcome && <Welcome />}
+      <Notices />
+      <CommandPalette />
         <Library />
       </div>
     )
@@ -59,6 +83,8 @@ export default function App(): JSX.Element {
   return (
     <div className="app" data-testid="app">
       {showWelcome && <Welcome />}
+      <Notices />
+      <CommandPalette />
       <ReadAloudOverlay />
       <Toolbar />
       {boardOpen ? (

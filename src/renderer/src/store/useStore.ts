@@ -4,6 +4,9 @@ import { decodeAssignment } from '@shared/assignment'
 import { splitIntoItems } from '@shared/ai'
 import { uid } from '@shared/ids'
 import { insertNoteUnder, makeBodyParagraph, nextBodyParagraphNumber } from '@shared/outline-templates'
+import { mergeCustomWord } from '@shared/spelling'
+import { docToPlainText, replaceWordInDoc } from '@shared/doc'
+import type { Editor as TiptapEditor } from '@tiptap/react'
 import type { AiRunInput, AiRunResult, BackupResult, ExportResult, RestoreResult } from '@shared/api'
 import { CARD_COLORS, DEFAULT_SETTINGS } from '@shared/types'
 import type {
@@ -15,12 +18,14 @@ import type {
   ExportFormat,
   OutlineNode,
   Paper,
+  PaperFormat,
+  PaperMeta,
   PaperSummary,
   RequirementItem
 } from '@shared/types'
 
 type View = 'library' | 'editor'
-type ToolsTab = 'assignment' | 'braindump' | 'reading' | 'clarity' | 'citations' | 'settings'
+type ToolsTab = 'assignment' | 'braindump' | 'reading' | 'clarity' | 'spelling' | 'citations' | 'settings'
 type SaveState = 'idle' | 'saving' | 'saved' | 'error'
 
 interface StoreState {
@@ -39,6 +44,8 @@ interface StoreState {
   boardOpen: boolean
   /** When true, the immersive "Read to me" overlay is open. */
   readAloudOpen: boolean
+  /** Bumped to ask the editor to open its cite-a-source flow (palette route). */
+  citeRequests: number
 
   // lifecycle
   init: () => Promise<void>
@@ -46,9 +53,34 @@ interface StoreState {
 
   // settings
   updateSettings: (patch: Partial<AppSettings>) => void
+  addCustomWord: (word: string) => void
+  removeCustomWord: (word: string) => void
+  /** The live TipTap editor, registered by the Editor while a paper is open. */
+  editorInstance: TiptapEditor | null
+  setEditorInstance: (editor: TiptapEditor | null) => void
+  /** Replace every occurrence of a word in the open paper (used by the Spelling panel). */
+  replaceWordEverywhere: (word: string, replacement: string) => void
+  /** A single quiet in-app toast (auto-dismisses). */
+  toast: { message: string; actions?: { label: string; run: () => void }[] } | null
+  showToast: (message: string, actions?: { label: string; run: () => void }[], ttlMs?: number) => void
+  dismissToast: () => void
+  /** One calm in-app question dialog (replaces window.confirm). */
+  confirmBox: { title: string; body: string; confirmLabel: string; danger?: boolean; info?: boolean } | null
+  askConfirm: (opts: { title: string; body: string; confirmLabel: string; danger?: boolean; info?: boolean }) => Promise<boolean>
+  resolveConfirm: (answer: boolean) => void
+  /** Consecutive autosave failures (drives the rescue affordance). */
+  saveFails: number
+  /** Emergency plain-text copy of the open paper. */
+  rescueCopy: () => Promise<void>
+  /** Recently deleted papers. */
+  trash: PaperSummary[]
+  refreshTrash: () => Promise<void>
+  restoreFromTrash: (id: string) => Promise<void>
+  /** Import a Word document as a new paper; shows an honest fidelity report. */
+  importPaper: () => Promise<void>
 
   // papers
-  createPaper: (input: { title: string; essayType: EssayType }) => Promise<void>
+  createPaper: (input: { title: string; essayType: EssayType; format?: PaperFormat; lean?: boolean }) => Promise<void>
   openPaper: (id: string) => Promise<void>
   closePaper: () => Promise<void>
   deletePaper: (id: string) => Promise<void>
@@ -56,6 +88,7 @@ interface StoreState {
   // editing
   setDoc: (doc: unknown) => void
   setTitle: (title: string) => void
+  setMeta: (patch: Partial<PaperMeta>) => void
   setScratch: (text: string) => void
   setDueDate: (date: string) => void
   setOutlineText: (id: string, text: string) => void
@@ -66,7 +99,7 @@ interface StoreState {
 
   // planning board (cards)
   addCard: (text?: string) => void
-  addCardsFromText: (text: string) => void
+  addCardsFromText: (text: string, fromAi?: boolean) => void
   updateCardText: (id: string, text: string) => void
   updateCardSection: (id: string, section: string | undefined) => void
   cycleCardColor: (id: string) => void
@@ -95,6 +128,7 @@ interface StoreState {
   toggleFocus: () => void
   toggleBoard: () => void
   openReadAloud: () => void
+  requestCite: () => void
   closeReadAloud: () => void
 
   // export
@@ -123,6 +157,9 @@ function mapNode(nodes: OutlineNode[], id: string, fn: (n: OutlineNode) => Outli
     return n
   })
 }
+
+let toastTimer: ReturnType<typeof setTimeout> | null = null
+let confirmResolver: ((v: boolean) => void) | null = null
 
 export const useStore = create<StoreState>()((set, get) => {
   const scheduleSave = (): void => {
@@ -160,6 +197,11 @@ export const useStore = create<StoreState>()((set, get) => {
     toolsTab: 'assignment',
     boardOpen: false,
     readAloudOpen: false,
+    citeRequests: 0,
+    toast: null,
+    confirmBox: null,
+    saveFails: 0,
+    trash: [],
 
     async init() {
       const [settings, papers] = await Promise.all([window.api.getSettings(), window.api.listPapers()])
@@ -182,14 +224,118 @@ export const useStore = create<StoreState>()((set, get) => {
       persistSettings()
     },
 
+    addCustomWord(word) {
+      const next = mergeCustomWord(get().settings.customWords, word)
+      if (next !== get().settings.customWords) get().updateSettings({ customWords: next })
+    },
+
+    removeCustomWord(word) {
+      const lower = word.toLowerCase()
+      get().updateSettings({
+        customWords: get().settings.customWords.filter((w) => w.toLowerCase() !== lower)
+      })
+    },
+
+    editorInstance: null,
+
+    setEditorInstance(editor) {
+      set({ editorInstance: editor })
+    },
+
+    replaceWordEverywhere(word, replacement) {
+      const ed = get().editorInstance
+      if (!ed || ed.isDestroyed) return
+      const next = replaceWordInDoc(ed.getJSON(), word, replacement)
+      ed.commands.setContent(next as never, true) // emitUpdate -> onUpdate persists
+    },
+
+    showToast(message, actions, ttlMs = 10000) {
+      if (toastTimer) clearTimeout(toastTimer)
+      set({ toast: { message, actions } })
+      toastTimer = setTimeout(() => set({ toast: null }), ttlMs)
+    },
+
+    dismissToast() {
+      if (toastTimer) clearTimeout(toastTimer)
+      set({ toast: null })
+    },
+
+    askConfirm(opts) {
+      return new Promise<boolean>((resolve) => {
+        confirmResolver = resolve
+        set({ confirmBox: opts })
+      })
+    },
+
+    resolveConfirm(answer) {
+      set({ confirmBox: null })
+      confirmResolver?.(answer)
+      confirmResolver = null
+    },
+
+    async rescueCopy() {
+      const cur = get().current
+      if (!cur) return
+      const res = await window.api.rescueText(cur.meta.title, docToPlainText(cur.content.doc))
+      if (res.ok && res.path) get().showToast(`Saved a copy to ${res.path}`)
+    },
+
+    async refreshTrash() {
+      set({ trash: await window.api.listTrash() })
+    },
+
+    async importPaper() {
+      const res = await window.api.importDocx()
+      if (!res.ok) {
+        if (!res.canceled) get().showToast('The import did not work: ' + (res.error ?? 'unknown error'))
+        return
+      }
+      await get().createPaper({ title: res.title || 'Imported paper', essayType: 'research', format: 'mla' })
+      // Wait for the editor to mount, then load the imported content into it.
+      const html = res.html ?? ''
+      const tryLoad = (attempt: number): void => {
+        const ed = get().editorInstance
+        if (ed && !ed.isDestroyed) {
+          ed.commands.setContent(html, true)
+        } else if (attempt < 40) {
+          setTimeout(() => tryLoad(attempt + 1), 100)
+        }
+      }
+      tryLoad(0)
+      const kept = (res.kept ?? []).join(', ')
+      const dropped = res.dropped ?? []
+      void get().askConfirm({
+        title: 'Imported — here is what survived',
+        body:
+          'Kept: ' + (kept || 'plain text') + '.\n' +
+          (dropped.length ? 'Not kept: ' + dropped.join('; ') + '.' : 'Nothing was lost.') +
+          '\nCheck the paper against your original before you rely on it.',
+        confirmLabel: 'OK',
+        info: true
+      })
+    },
+
+    async restoreFromTrash(id) {
+      const res = await window.api.restorePaper(id)
+      if (res.ok) {
+        await get().refreshPapers()
+        await get().refreshTrash()
+        get().showToast('Paper restored.')
+      }
+    },
+
     async createPaper(input) {
       const paper = await window.api.createPaper(input)
+      const counts = { ...(get().settings.typeCounts ?? {}) }
+      counts[input.essayType] = (counts[input.essayType] ?? 0) + 1
+      get().updateSettings({ typeCounts: counts })
       set({ current: paper, view: 'editor', dirty: false, saveState: 'saved' })
       get().updateSettings({ lastPaperId: paper.meta.id })
       await get().refreshPapers()
     },
 
     async openPaper(id) {
+      void window.api.takeSnapshot(id)
       const paper = await window.api.openPaper(id)
       if (!paper) {
         await get().refreshPapers()
@@ -220,6 +366,13 @@ export const useStore = create<StoreState>()((set, get) => {
       const cur = get().current
       if (!cur) return
       set({ current: { ...cur, meta: { ...cur.meta, title } } })
+      scheduleSave()
+    },
+
+    setMeta(patch) {
+      const cur = get().current
+      if (!cur) return
+      set({ current: { ...cur, meta: { ...cur.meta, ...patch } } })
       scheduleSave()
     },
 
@@ -288,7 +441,7 @@ export const useStore = create<StoreState>()((set, get) => {
       patchContent({ cards: [...cur.content.cards, card] })
     },
 
-    addCardsFromText(text) {
+    addCardsFromText(text, fromAi) {
       const cur = get().current
       if (!cur) return
       const items = splitIntoItems(text)
@@ -299,6 +452,7 @@ export const useStore = create<StoreState>()((set, get) => {
         text: t,
         x: 24 + (i % 4) * 184,
         y: 24 + Math.floor(i / 4) * 150 + (base > 0 ? 12 : 0),
+        fromAi: fromAi || undefined,
         color: CARD_COLORS[(base + i) % CARD_COLORS.length]
       }))
       patchContent({ cards: [...cur.content.cards, ...newCards] })
@@ -341,7 +495,16 @@ export const useStore = create<StoreState>()((set, get) => {
     removeCard(id) {
       const cur = get().current
       if (!cur) return
+      const removed = cur.content.cards.find((c) => c.id === id)
       patchContent({ cards: cur.content.cards.filter((c) => c.id !== id) })
+      if (removed) {
+        get().showToast('Card deleted.', [
+          { label: 'Undo', run: () => {
+            const now = get().current
+            if (now) patchContent({ cards: [...now.content.cards, removed] })
+          } }
+        ])
+      }
     },
 
     sendCardToOutline(id) {
@@ -371,7 +534,20 @@ export const useStore = create<StoreState>()((set, get) => {
     removeSource(id) {
       const cur = get().current
       if (!cur) return
+      const idx = cur.content.sources.findIndex((s) => s.id === id)
+      const removed = cur.content.sources[idx]
       patchContent({ sources: cur.content.sources.filter((s) => s.id !== id) })
+      if (removed) {
+        get().showToast('Source deleted.', [
+          { label: 'Undo', run: () => {
+            const now = get().current
+            if (!now) return
+            const list = [...now.content.sources]
+            list.splice(Math.min(idx, list.length), 0, removed)
+            patchContent({ sources: list })
+          } }
+        ])
+      }
     },
 
     setAssignmentPrompt(prompt) {
@@ -425,12 +601,27 @@ export const useStore = create<StoreState>()((set, get) => {
     removeRequirement(id) {
       const cur = get().current
       if (!cur) return
+      const removed = cur.content.assignment.requirements.find((r) => r.id === id)
       patchContent({
         assignment: {
           ...cur.content.assignment,
           requirements: cur.content.assignment.requirements.filter((r) => r.id !== id)
         }
       })
+      if (removed) {
+        get().showToast('Requirement deleted.', [
+          { label: 'Undo', run: () => {
+            const now = get().current
+            if (!now) return
+            patchContent({
+              assignment: {
+                ...now.content.assignment,
+                requirements: [...now.content.assignment.requirements, removed]
+              }
+            })
+          } }
+        ])
+      }
     },
 
     async save() {
@@ -441,8 +632,13 @@ export const useStore = create<StoreState>()((set, get) => {
         saveTimer = null
       }
       set({ saveState: 'saving' })
+      // Remember the caret so re-entry can offer "Take me there".
+      const ed = get().editorInstance
+      const lastCursor = ed && !ed.isDestroyed ? ed.state.selection.head : cur.meta.lastCursor
+      const meta = { ...cur.meta, lastCursor }
+      set({ current: { ...cur, meta } })
       try {
-        const res = await window.api.savePaper({ meta: cur.meta, content: cur.content })
+        const res = await window.api.savePaper({ meta, content: cur.content })
         // Reflect the server timestamp without clobbering newer edits.
         set((state) => ({
           dirty: false,
@@ -452,8 +648,10 @@ export const useStore = create<StoreState>()((set, get) => {
             : state.current
         }))
       } catch {
-        set({ saveState: 'error' })
+        set((st) => ({ saveState: 'error', saveFails: st.saveFails + 1 }))
+        return
       }
+      set({ saveFails: 0 })
     },
 
     toggleOutline() {
@@ -476,6 +674,9 @@ export const useStore = create<StoreState>()((set, get) => {
       set((s) => ({ boardOpen: !s.boardOpen }))
     },
 
+    requestCite() {
+      set((s) => ({ citeRequests: s.citeRequests + 1 }))
+    },
     openReadAloud() {
       set({ readAloudOpen: true })
     },

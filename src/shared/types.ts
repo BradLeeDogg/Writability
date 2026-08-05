@@ -2,6 +2,10 @@
 // Kept dependency-free so both the Electron main process and the renderer can
 // import them.
 
+import type { PaperFormat, PaperHeading } from './format'
+export type { PaperFormat, PaperHeading } from './format'
+
+export type PaperStage = 'draft' | 'polish'
 export type EssayType = 'argument' | 'research' | 'lab' | 'thesis' | 'reflection'
 
 export const ESSAY_TYPE_LABELS: Record<EssayType, string> = {
@@ -46,6 +50,18 @@ export interface PaperMeta {
   wordGoal?: number
   /** Optional due date (YYYY-MM-DD) for the deadline back-planner. */
   dueDate?: string
+  /** Citation/layout style the export should follow. */
+  format?: PaperFormat
+  /** Student-supplied heading fields (name, instructor, course, date). */
+  heading?: PaperHeading
+  /** Whether the export numbers its pages. Defaults to on for set formats. */
+  pageNumbers?: boolean
+  /** Writing stage: 'draft' defers spelling/review marks; 'polish' shows them. */
+  stage?: PaperStage
+  /** Lean mode: hide the writing prompts once the student knows the steps. */
+  hidePrompts?: boolean
+  /** Last caret position in the document, for "Take me there" on re-entry. */
+  lastCursor?: number
 }
 
 /** One concrete, checkable requirement pulled from (or added to) the prompt. */
@@ -76,6 +92,8 @@ export interface Card {
   color: CardColor
   /** Optional id of the top-level outline section this idea belongs to. */
   section?: string
+  /** True when the card text came from the AI brainstorm (provenance stays visible). */
+  fromAi?: boolean
 }
 
 export const CARD_COLORS: CardColor[] = ['yellow', 'blue', 'green', 'pink']
@@ -135,8 +153,18 @@ export interface AppSettings {
   focusMode: boolean
   /** Spotlight the current paragraph and dim the rest (typewriter focus). */
   spotlightMode: boolean
+  /** A tinted reading guide band that follows the pointer across the page. */
+  readingRuler: boolean
+  /** Show the editor as the printed page (double-spaced, indented, on white). */
+  printLayout: boolean
   /** Underline known academic terms with a hover-to-define tooltip. */
   defineTerms: boolean
+  /** Gently underline likely misspellings and offer suggestions. */
+  spellHelp: boolean
+  /** Also mark commonly-confused words (their/there…) with a "which one?" hint. */
+  homophoneHelp: boolean
+  /** Personal dictionary: words the student has taught the spell-checker. */
+  customWords: string[]
   /** Preferred length of a focus-timer work session, in minutes. */
   focusTimerMinutes: number
   /** Respect/force reduced motion. */
@@ -145,6 +173,10 @@ export interface AppSettings {
   overlayTint: OverlayTint
   /** Read-aloud speaking rate (0.6 – 1.4). */
   ttsRate: number
+  /** Read-aloud pitch (0.6 – 1.4); lower can feel calmer. */
+  ttsPitch: number
+  /** Preferred read-aloud voice (its voiceURI). Empty = the system default. */
+  ttsVoice?: string
   /** Show the clarity panel results. */
   showClarity: boolean
   /** Has the student seen the first-run welcome guide? */
@@ -159,6 +191,12 @@ export interface AppSettings {
   aiModel: string
   /** Id of the last paper opened, so we can restore it on launch. */
   lastPaperId?: string
+  /** How many papers of each type the student has created (for the lean nudge). */
+  typeCounts?: Record<string, number>
+  /** True once the student has said "no thanks" to the start-leaner nudge. */
+  leanNudgeDismissed?: boolean
+  /** Offer a citation after pasting a long passage. Defaults to on. */
+  pasteCitePrompt?: boolean
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -171,11 +209,17 @@ export const DEFAULT_SETTINGS: AppSettings = {
   maxLineWidth: 68,
   focusMode: false,
   spotlightMode: false,
+  readingRuler: false,
+  printLayout: false,
   defineTerms: false,
+  spellHelp: true,
+  homophoneHelp: false,
+  customWords: [],
   focusTimerMinutes: 25,
   reduceMotion: false,
   overlayTint: 'none',
   ttsRate: 1,
+  ttsPitch: 1,
   showClarity: true,
   onboarded: false,
   aiModel: 'claude-opus-4-8'

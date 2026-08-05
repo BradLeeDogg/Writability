@@ -5,6 +5,8 @@ import { backPlan, nextAction } from '@shared/planner'
 import type { OutlineNode } from '@shared/types'
 
 export function OutlinePanel(): JSX.Element {
+  const hidePromptsMeta = useStore((s) => s.current?.meta.hidePrompts ?? false)
+  const setMetaOutline = useStore((s) => s.setMeta)
   const current = useStore((s) => s.current)!
   const toggleOutline = useStore((s) => s.toggleOutline)
   const addBodyParagraph = useStore((s) => s.addBodyParagraph)
@@ -21,6 +23,15 @@ export function OutlinePanel(): JSX.Element {
     <aside className="panel outline" data-testid="outline" aria-label="Outline">
       <div className="panel-head">
         <h2>Outline</h2>
+      <label className="toggle small-toggle" title="Hide the step-by-step prompts once you know them">
+        <input
+          type="checkbox"
+          data-testid="toggle-prompts"
+          checked={!hidePromptsMeta}
+          onChange={(e) => setMetaOutline({ hidePrompts: !e.target.checked || undefined })}
+        />
+        <span>Show writing prompts</span>
+      </label>
         <button className="icon" aria-label="Hide outline" title="Hide outline" onClick={toggleOutline}>
           ‹
         </button>
@@ -122,7 +133,7 @@ function OutlineItem({ node, depth, thesisText }: OutlineItemProps): JSX.Element
           </button>
         )}
       </div>
-      <p className="outline-prompt">{node.prompt}</p>
+      {!useStore.getState().current?.meta.hidePrompts && <p className="outline-prompt">{node.prompt}</p>}
       <textarea
         className="outline-text"
         value={node.text}

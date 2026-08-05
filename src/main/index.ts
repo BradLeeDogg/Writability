@@ -1,4 +1,5 @@
-import { app, BrowserWindow, shell } from 'electron'
+import { app, BrowserWindow, ipcMain, shell } from 'electron'
+import { autoUpdater } from 'electron-updater'
 import { join } from 'path'
 import { tmpdir } from 'os'
 import { registerIpc } from './ipc'
@@ -44,6 +45,24 @@ function createWindow(): BrowserWindow {
     return { action: 'deny' }
   })
 
+  // Quit-safe saving: before the window closes, ask the renderer to flush any
+  // debounced save and wait (briefly) for its ack so the last keystrokes are
+  // never lost to the 700ms autosave window.
+  let flushed = false
+  win.on('close', (e) => {
+    if (flushed || win.webContents.isDestroyed()) return
+    e.preventDefault()
+    const finish = (): void => {
+      if (flushed) return
+      flushed = true
+      ipcMain.removeListener('app:flushed', finish)
+      if (!win.isDestroyed()) win.destroy()
+    }
+    ipcMain.once('app:flushed', finish)
+    win.webContents.send('app:flush')
+    setTimeout(finish, 1000)
+  })
+
   const rendererUrl = process.env['ELECTRON_RENDERER_URL']
   if (rendererUrl) {
     win.loadURL(rendererUrl)
@@ -72,6 +91,29 @@ app.whenReady().then(async () => {
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })
+
+  // Quiet auto-update (Windows installer builds only). Downloads in the
+  // background from the rolling win-latest release and installs on quit —
+  // one calm toast, no nagging, nothing interrupts writing.
+  if (app.isPackaged && process.platform === 'win32') {
+    try {
+      autoUpdater.setFeedURL({
+        provider: 'generic',
+        url: 'https://github.com/BradLeeDogg/Writability/releases/download/win-latest'
+      })
+      autoUpdater.autoDownload = true
+      autoUpdater.autoInstallOnAppQuit = true
+      autoUpdater.on('update-downloaded', (info) => {
+        win.webContents.send('app:update-ready', info.version)
+      })
+      autoUpdater.on('error', () => {
+        // Updates are best-effort; never surface update noise to the student.
+      })
+      void autoUpdater.checkForUpdates()
+    } catch {
+      // No update feed available (e.g. offline) — carry on silently.
+    }
+  }
 })
 
 app.on('window-all-closed', () => {

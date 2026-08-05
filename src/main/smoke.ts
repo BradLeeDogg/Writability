@@ -10,7 +10,9 @@ const PROBE = `(async () => {
   const setValue = (el, value) => {
     const proto = el.tagName === 'TEXTAREA'
       ? window.HTMLTextAreaElement.prototype
-      : window.HTMLInputElement.prototype;
+      : el.tagName === 'SELECT'
+        ? window.HTMLSelectElement.prototype
+        : window.HTMLInputElement.prototype;
     Object.getOwnPropertyDescriptor(proto, 'value').set.call(el, value);
     el.dispatchEvent(new Event('input', { bubbles: true }));
     el.dispatchEvent(new Event('change', { bubbles: true }));
@@ -46,9 +48,14 @@ const PROBE = `(async () => {
 
   // Library view (no papers yet in the throwaway data dir).
   await waitFor('[data-testid="library"]', 'library view');
+  await waitFor('[data-testid="import-docx"]', 'import docx button');
   (await waitFor('[data-testid="new-paper"]', 'new paper button')).click();
 
-  // New-paper dialog -> create with defaults.
+  // New-paper dialog: the lean option exists (scaffolding fade).
+  await waitFor('[data-testid="create-lean"]', 'lean-start option');
+
+  // New-paper dialog -> pick a format, then create.
+  (await waitFor('[data-testid="format-mla"]', 'MLA format chip')).click();
   (await waitFor('[data-testid="create-paper"]', 'create paper button')).click();
 
   // Editor view with outline scaffold.
@@ -56,6 +63,18 @@ const PROBE = `(async () => {
   await waitFor('[data-testid="outline"]', 'outline panel');
   if (!document.querySelector('[data-testid="outline-node"]')) {
     throw new Error('outline rendered no scaffold steps');
+  }
+
+  // Scaffolding fade: hiding writing prompts removes them; turning back restores.
+  {
+    const promptsBefore = document.querySelectorAll('.outline-prompt').length;
+    if (!promptsBefore) throw new Error('no outline prompts rendered');
+    (await waitFor('[data-testid="toggle-prompts"]', 'prompts toggle')).click();
+    await sleep(120);
+    if (document.querySelectorAll('.outline-prompt').length !== 0) throw new Error('prompts still visible in lean mode');
+    q('[data-testid="toggle-prompts"]').click();
+    await sleep(120);
+    if (!document.querySelectorAll('.outline-prompt').length) throw new Error('prompts did not come back');
   }
 
   // Thesis pin is docked above the writing area.
@@ -80,6 +99,14 @@ const PROBE = `(async () => {
   // Drafting bridge: insert the outline into the document as real headings.
   (await waitFor('[data-testid="insert-outline"]', 'insert outline button')).click();
   await waitFor('.prose h2', 'outline headings inserted into the document');
+  // The status bar shows an estimated page count once there are words.
+  await waitFor('[data-testid="page-count"]', 'page-count in the status bar');
+
+  // Drafting stage: new papers start in Draft (no spelling marks); switching
+  // to Polish is what turns review marks on.
+  if (!q('[data-testid="stage-draft"]')) throw new Error('stage toggle missing');
+  (await waitFor('[data-testid="stage-polish"]', 'polish stage button')).click();
+  await sleep(120);
 
   // Linking-words menu inserts a phrase at the cursor.
   (await waitFor('[data-testid="linking-words"]', 'linking words menu')).click();
@@ -87,10 +114,36 @@ const PROBE = `(async () => {
 
   // Assignment decoder (the default tools tab): decode a prompt into a checklist.
   await waitFor('[data-testid="assignment-panel"]', 'assignment panel');
+
+  // Paper details: a format and heading that drive the export.
+  const details = await waitFor('[data-testid="paper-details"]', 'paper details');
+  details.open = true;
+  setValue(await waitFor('[data-testid="meta-name"]', 'student name field'), 'Ada Lovelace');
+  if (q('[data-testid="meta-name"]').value !== 'Ada Lovelace') throw new Error('heading name did not stick');
   const prompt = await waitFor('[data-testid="assignment-prompt"]', 'assignment prompt');
-  setValue(prompt, 'Write a 600-word essay. Analyse the theme. Use at least 3 sources in MLA style.');
+  setValue(
+    prompt,
+    'Write a 600-word essay. Analyse the theme. Use at least 3 sources in MLA style.\\n\\n' +
+      'Rubric:\\n- Thesis: clear and arguable (20 points)\\n- Evidence: uses the sources well (30 points)'
+  );
   (await waitFor('[data-testid="decode-assignment"]', 'decode button')).click();
   await waitFor('[data-testid="requirement-item"]', 'a decoded requirement');
+  // The rubric rows should be pulled out as graded-on items.
+  {
+    const items = [...document.querySelectorAll('[data-testid="requirement-item"]')].map((e) => e.textContent || '');
+    if (!items.some((t) => /Graded on:/i.test(t))) throw new Error('rubric criteria were not decoded into graded-on items');
+  }
+
+  // The vague-prompt bridge: a short "discuss" prompt surfaces unstated expectations.
+  setValue(q('[data-testid="assignment-prompt"]'), 'Discuss the role of memory in Beloved.');
+  await waitFor('[data-testid="expectations-bridge"]', 'unstated-expectations bridge');
+  {
+    const before = document.querySelectorAll('[data-testid="requirement-item"]').length;
+    q('[data-testid="expectation-add"]').click();
+    await sleep(120);
+    const after = document.querySelectorAll('[data-testid="requirement-item"]').length;
+    if (after !== before + 1) throw new Error('adding an expectation did not add a requirement');
+  }
 
   // Brain dump: a judgement-free scratch space.
   (await waitFor('[data-testid="tab-braindump"]', 'brain dump tab')).click();
@@ -113,7 +166,7 @@ const PROBE = `(async () => {
   q('[data-testid="tab-clarity"]').dispatchEvent(
     new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true })
   );
-  await waitFor('[data-testid="citations-panel"]', 'ArrowRight moves to the next tab');
+  await waitFor('[data-testid="spelling-panel"]', 'ArrowRight moves to the next (Spelling) tab');
 
   (await waitFor('[data-testid="tab-citations"]', 'citations tab')).click();
   await waitFor('[data-testid="citations-panel"]', 'citations panel');
@@ -125,6 +178,9 @@ const PROBE = `(async () => {
   await waitFor('[data-testid="backup-create"]', 'backup button');
   await waitFor('[data-testid="backup-restore"]', 'restore button');
 
+  // Read-aloud voice controls (voice picker when available, plus a preview).
+  await waitFor('[data-testid="tts-preview"]', 'read-aloud voice preview');
+
   // Opt-in AI controls render; set a dummy key to reveal the helper (no call is made).
   await waitFor('[data-testid="ai-model"]', 'AI model select');
   setValue(await waitFor('[data-testid="ai-key"]', 'AI key input'), 'sk-ant-smoke-test');
@@ -134,6 +190,81 @@ const PROBE = `(async () => {
   await waitFor('.prose .pm-glossary', 'academic terms underlined in the prose');
   (await waitFor('[data-testid="toggle-spotlight"]', 'spotlight toggle')).click();
   await waitFor('.editor-surface.spotlight', 'spotlight mode applied');
+
+  // Print layout: the editor takes on the printed-page look.
+  (await waitFor('[data-testid="toggle-print-layout"]', 'print-layout toggle')).click();
+  await sleep(60);
+  if (document.documentElement.dataset.printLayout !== 'true') throw new Error('print layout did not turn on');
+  (await waitFor('[data-testid="toggle-print-layout"]', 'print-layout toggle off')).click();
+  await sleep(60);
+  if (document.documentElement.dataset.printLayout !== 'false') throw new Error('print layout did not turn off');
+
+  // Reading ruler: enable it, then move the pointer over the page to reveal the band.
+  (await waitFor('[data-testid="toggle-ruler"]', 'reading-ruler toggle')).click();
+  await sleep(80);
+  const scroll = await waitFor('.editor-scroll', 'editor scroll area');
+  scroll.dispatchEvent(new MouseEvent('mousemove', { bubbles: true, clientX: 220, clientY: 240 }));
+  await waitFor('[data-testid="reading-ruler"]', 'reading ruler follows the pointer');
+
+  // Gentle spelling help: type a misspelling, see it flagged, fix it from the popover.
+  const prose = await waitFor('.prose', 'editor prose');
+  prose.focus();
+  document.execCommand('insertText', false, ' becuase ');
+  let flagged = null;
+  for (let i = 0; i < 80; i++) {
+    flagged = [...document.querySelectorAll('.pm-misspelled')].find((e) => e.textContent === 'becuase');
+    if (flagged) break;
+    await sleep(80);
+  }
+  if (!flagged) throw new Error('"becuase" was not flagged as a misspelling');
+  flagged.click();
+  await waitFor('[data-testid="spell-popover"]', 'spelling popover');
+  const because = [...document.querySelectorAll('[data-testid="spell-suggestion"]')].find((b) => b.textContent === 'because');
+  if (!because) throw new Error('no "because" suggestion was offered');
+  because.click();
+  await sleep(150);
+  if (q('.prose').textContent.includes('becuase')) throw new Error('misspelling still present after fix');
+  if (!q('.prose').textContent.includes('because')) throw new Error('correction was not applied');
+
+  // Add-to-dictionary: teach it a made-up name and the underline goes away.
+  prose.focus();
+  document.execCommand('insertText', false, ' Zylphard ');
+  let name = null;
+  for (let i = 0; i < 80; i++) {
+    name = [...document.querySelectorAll('.pm-misspelled')].find((e) => e.textContent === 'Zylphard');
+    if (name) break;
+    await sleep(80);
+  }
+  if (!name) throw new Error('a made-up word was not flagged');
+  name.click();
+  await waitFor('[data-testid="spell-popover"]', 'popover for the made-up word');
+  (await waitFor('[data-testid="spell-add"]', 'add-to-dictionary button')).click();
+  let gone = false;
+  for (let i = 0; i < 60; i++) {
+    if (![...document.querySelectorAll('.pm-misspelled')].some((e) => e.textContent === 'Zylphard')) { gone = true; break; }
+    await sleep(80);
+  }
+  if (!gone) throw new Error('word still flagged after adding it to the dictionary');
+  await waitFor('[data-testid="my-word"]', 'the taught word appears in My words');
+
+  // Spelling summary panel: lists flagged words and fixes every occurrence at once.
+  prose.focus();
+  document.execCommand('insertText', false, ' I will recieve it and recieve more. ');
+  (await waitFor('[data-testid="tab-spelling"]', 'spelling tab')).click();
+  await waitFor('[data-testid="spelling-panel"]', 'spelling panel');
+  let summaryRow = null;
+  for (let i = 0; i < 100; i++) {
+    summaryRow = [...document.querySelectorAll('[data-testid="spell-summary-word"]')].find((e) => e.textContent === 'recieve');
+    if (summaryRow) break;
+    await sleep(80);
+  }
+  if (!summaryRow) throw new Error('misspelling not listed in the spelling panel');
+  const fixAll = [...document.querySelectorAll('[data-testid="spell-summary-suggestion"]')].find((b) => b.textContent === 'receive');
+  if (!fixAll) throw new Error('no "receive" suggestion in the spelling panel');
+  fixAll.click();
+  await sleep(250);
+  if (q('.prose').textContent.includes('recieve')) throw new Error('fix-all left a misspelling behind');
+  if ((q('.prose').textContent.match(/receive/g) || []).length < 2) throw new Error('fix-all did not replace both occurrences');
 
   // Toggle a setting to exercise the live theming path.
   const themeBtn = q('[data-testid="theme-calm-dark"]');
@@ -153,6 +284,13 @@ const PROBE = `(async () => {
   // Visual planning board: toggle in, add a card, sort it into a part of the paper.
   (await waitFor('[data-testid="board-toggle"]', 'board toggle')).click();
   await waitFor('[data-testid="board"]', 'planning board');
+
+  // The brainstorm box can be seeded from the student's own work (no retyping).
+  (await waitFor('[data-testid="board-seed-assignment"]', 'board brainstorm seed chip')).click();
+  await sleep(50);
+  const boardInput = q('[data-testid="board-ai-input"]');
+  if (!boardInput || !boardInput.value.trim()) throw new Error('board seed chip did not fill the brainstorm box');
+
   (await waitFor('[data-testid="add-card"]', 'add card button')).click();
   setValue(await waitFor('[data-testid="board-card"] .card-text', 'a card on the board'), 'a planned idea');
 
@@ -171,14 +309,176 @@ const PROBE = `(async () => {
     throw new Error('sorted card did not appear in a column');
   }
 
+  // Drag the card from its column into "Unsorted" (the last column) and verify it moves.
+  const grip = await waitFor('[data-testid="card-grip"]', 'card drag grip');
+  const cols = [...document.querySelectorAll('[data-testid="board-column"]')];
+  const target = cols[cols.length - 1];
+  if (target.querySelector('[data-testid="board-card"]')) throw new Error('target column was not empty to start');
+  const dt = new DataTransfer();
+  grip.dispatchEvent(new DragEvent('dragstart', { bubbles: true, dataTransfer: dt }));
+  target.dispatchEvent(new DragEvent('dragover', { bubbles: true, dataTransfer: dt }));
+  target.dispatchEvent(new DragEvent('drop', { bubbles: true, dataTransfer: dt }));
+  await sleep(80);
+  if (!target.querySelector('[data-testid="board-card"]')) {
+    throw new Error('drag-to-sort did not move the card into the target column');
+  }
+
+  // Deleting a card shows an Undo toast that restores it.
+  {
+    const before = document.querySelectorAll('[data-testid="board-card"]').length;
+    const del = document.querySelector('[data-testid="board-card"] [aria-label="Delete card"]');
+    del.click();
+    await waitFor('[data-testid="toast-undo"]', 'undo toast for deleted card');
+    q('[data-testid="toast-undo"]').click();
+    await sleep(120);
+    const after = document.querySelectorAll('[data-testid="board-card"]').length;
+    if (after !== before) throw new Error('undo did not restore the card (' + before + ' -> ' + after + ')');
+  }
+
   (await waitFor('[data-testid="board-toggle"]', 'board toggle back')).click();
   await waitFor('[data-testid="editor"]', 'back to the editor');
 
-  // Immersive "Read to me": opens a reader that highlights sentences as it reads.
+  // Find & replace: Ctrl+F opens the bar, finds matches, Esc closes.
+  window.dispatchEvent(new KeyboardEvent('keydown', { key: 'f', ctrlKey: true, bubbles: true }));
+  const findInput = await waitFor('[data-testid="find-input"]', 'find bar input');
+  setValue(findInput, 'because');
+  await sleep(120);
+  const count = q('[data-testid="find-count"]').textContent;
+  if (!/of/.test(count)) throw new Error('find reported no matches: ' + count);
+  if (!document.querySelector('.pm-find')) throw new Error('find matches not highlighted');
+  (await waitFor('[data-testid="find-close"]', 'find close')).click();
+  await sleep(80);
+  if (q('[data-testid="find-bar"]')) throw new Error('find bar did not close');
+
+  // Command palette: Ctrl+K opens it; running a command switches tabs.
+  window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true, bubbles: true }));
+  const pal = await waitFor('[data-testid="palette-input"]', 'command palette input');
+  setValue(pal, 'spelling');
+  pal.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+  await waitFor('[data-testid="spelling-panel"]', 'palette command opened the Spelling tab');
+  (await waitFor('[data-testid="tab-assignment"]', 'back to assignment tab')).click();
+  await sleep(80);
+
+  // Insert-citation popover: Ctrl+Shift+C opens; with no sources it says so.
+  window.dispatchEvent(new KeyboardEvent('keydown', { key: 'c', ctrlKey: true, shiftKey: true, bubbles: true }));
+  await waitFor('[data-testid="cite-popover"]', 'cite popover');
+  await waitFor('[data-testid="cite-empty"]', 'cite popover empty state');
+  q('[data-testid="cite-input"]').dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  await sleep(80);
+  if (q('[data-testid="cite-popover"]')) throw new Error('cite popover did not close');
+
+  // Add a source, then cite it end to end: pick the source, say which page,
+  // choose how it reads, and check a real marker object lands in the paper.
+  (await waitFor('[data-testid="tab-citations"]', 'citations tab')).click();
+  await waitFor('[data-testid="citations-panel"]', 'citations panel');
+  setValue(await waitFor('[data-testid="source-authors"]', 'source authors field'), 'Ng, Priya');
+  setValue(await waitFor('[data-testid="source-title"]', 'source title field'), 'On Memory');
+  setValue(await waitFor('[data-testid="source-year"]', 'source year field'), '2019');
+  (await waitFor('[data-testid="add-source"]', 'add source button')).click();
+  await waitFor('[data-testid="source-unused"]', 'a newly added source reads as not cited yet');
+
+  (await waitFor('[data-testid="add-citation"]', 'cite button in the format bar')).click();
+  const citeOption = await waitFor('[data-testid="cite-option"]', 'the source offered to cite');
+  citeOption.click();
+  const citePage = await waitFor('[data-testid="cite-page"]', 'page field on the citation details step');
+  setValue(citePage, '42');
+  (await waitFor('[data-testid="cite-form-narrative"]', 'narrative form option')).click();
+  await sleep(100);
+  const preview = q('[data-testid="cite-preview"]').textContent;
+  if (!/Ng \\(42\\)/.test(preview)) throw new Error('citation preview did not show the narrative marker: ' + preview);
+  (await waitFor('[data-testid="cite-insert"]', 'insert citation button')).click();
+  await sleep(180);
+
+  const marker = document.querySelector('.prose span.cite-ref');
+  if (!marker) throw new Error('in-text citation marker did not appear in the paper');
+  if (marker.textContent.indexOf('Ng (42)') === -1) {
+    throw new Error('citation marker rendered the wrong text: ' + marker.textContent);
+  }
+  if (marker.getAttribute('data-page') !== '42') throw new Error('citation did not remember its page');
+
+  // Clicking the marker reopens it for correction rather than making the
+  // student edit characters inside brackets.
+  marker.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+  await waitFor('[data-testid="cite-details"]', 'clicking a marker reopens the citation details');
+  if (q('[data-testid="cite-page"]').value !== '42') throw new Error('reopened citation lost its page');
+  await waitFor('[data-testid="cite-remove"]', 'an existing citation can be removed');
+  q('[data-testid="cite-page"]').dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  await sleep(100);
+
+  // The command palette reaches the same flow, so citing does not depend on
+  // remembering a three-key chord.
+  window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true, bubbles: true }));
+  const pal2 = await waitFor('[data-testid="palette-input"]', 'command palette for citing');
+  setValue(pal2, 'cite a source');
+  pal2.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+  await waitFor('[data-testid="cite-popover"]', 'palette opened the cite flow');
+  q('[data-testid="cite-input"]').dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  await sleep(100);
+
+  // The Citations tab now knows the source is actually used.
+  (await waitFor('[data-testid="tab-citations"]', 'citations tab again')).click();
+  await waitFor('[data-testid="source-used"]', 'the source now reads as cited');
+  const usedSummary = (await waitFor('[data-testid="used-summary"]', 'used-sources summary')).textContent;
+  if (!/1 of|All 1/.test(usedSummary)) throw new Error('used summary did not count the citation: ' + usedSummary);
+  (await waitFor('[data-testid="tab-assignment"]', 'back to assignment tab')).click();
+  await sleep(80);
+
+  // Because the marker is an object, switching the paper's style restyles it
+  // in place — the student never has to retype a bracket.
+  {
+    const details2 = await waitFor('[data-testid="paper-details"]', 'paper details for a style switch');
+    details2.open = true;
+    setValue(await waitFor('[data-testid="meta-format"]', 'paper format select'), 'apa');
+    const started = Date.now();
+    let restyled = '';
+    while (Date.now() - started < 4000) {
+      const markerNow = document.querySelector('.prose span.cite-ref');
+      restyled = markerNow ? markerNow.textContent : '';
+      if (restyled.indexOf('2019') !== -1) break;
+      await sleep(100);
+    }
+    if (restyled.indexOf('Ng (2019, p. 42)') === -1) {
+      throw new Error('switching to APA did not restyle the citation marker: ' + restyled);
+    }
+    setValue(q('[data-testid="meta-format"]'), 'mla');
+    await sleep(250);
+  }
+
+  // Paste guard: a long paste offers the citation instead of silently letting
+  // source material become the student's own words.
+  {
+    const dt = new DataTransfer();
+    dt.setData('text/plain', 'Memory is not a recording but a reconstruction that shifts each time a person recalls an event in a new setting.');
+    q('.prose').dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true }));
+    await waitFor('[data-testid="paste-cite-bar"]', 'paste offers a citation');
+    (await waitFor('[data-testid="paste-cite-later"]', 'dismiss the paste offer')).click();
+    await sleep(120);
+    if (q('[data-testid="paste-cite-bar"]')) throw new Error('paste offer did not dismiss');
+  }
+
+  // Footnotes: add one from the format bar; a numbered marker appears.
+  (await waitFor('[data-testid="add-footnote"]', 'footnote button')).click();
+  const fnInput = await waitFor('[data-testid="footnote-input"]', 'footnote input');
+  setValue(fnInput, 'See the appendix.');
+  fnInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+  await sleep(150);
+  if (!document.querySelector('sup.fn-ref')) throw new Error('footnote marker did not appear');
+
+  // Quick capture: Ctrl+J banks a thought to Brain dump without leaving the page.
+  window.dispatchEvent(new KeyboardEvent('keydown', { key: 'j', ctrlKey: true, bubbles: true }));
+  const cap = await waitFor('[data-testid="capture-input"]', 'quick capture input');
+  setValue(cap, 'remember the counterargument');
+  cap.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+  await sleep(120);
+  if (q('[data-testid="capture-bar"]')) throw new Error('capture bar did not close');
+
+  // Immersive "Read to me": opens a reader that highlights each word as it reads.
   (await waitFor('[data-testid="read-aloud"]', 'read-aloud button')).click();
   await waitFor('[data-testid="read-aloud-overlay"]', 'read-aloud overlay');
   await waitFor('[data-testid="reader-page"]', 'reader page');
   if (!document.querySelector('.reader-sentence')) throw new Error('reader rendered no sentences');
+  if (!document.querySelector('.reader-word[data-wi]')) throw new Error('reader rendered no words to highlight');
+  if (!q('[data-testid="reader-pause"]')) throw new Error('reader has no pause control');
   (await waitFor('[data-testid="reader-close"]', 'reader close button')).click();
   await sleep(120);
   if (document.querySelector('[data-testid="read-aloud-overlay"]')) throw new Error('reader overlay did not close');

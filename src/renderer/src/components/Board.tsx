@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react'
 import { useStore } from '../store/useStore'
+import { coachContext } from '@shared/coach'
 import type { Card } from '@shared/types'
 
 // A visual planning board (corkboard). Ideas live as sticky notes the student
@@ -36,6 +37,39 @@ export function Board(): JSX.Element {
   const [aiError, setAiError] = useState('')
 
   const aiConfigured = !!(aiKey && aiKey.trim())
+  const ctx = coachContext(current.content)
+
+  // Drag-to-sort between "By part" columns. Native HTML5 DnD; the section
+  // <select> stays as the keyboard-accessible way to do the same thing.
+  const draggingId = useRef<string | null>(null)
+  const [dragOverCol, setDragOverCol] = useState<string | null>(null)
+
+  const onCardDragStart = (e: React.DragEvent, cardId: string): void => {
+    draggingId.current = cardId
+    e.dataTransfer.effectAllowed = 'move'
+    e.dataTransfer.setData('text/plain', cardId)
+  }
+  const onColumnDragOver = (e: React.DragEvent, colKey: string): void => {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+    if (dragOverCol !== colKey) setDragOverCol(colKey)
+  }
+  const onColumnDrop = (e: React.DragEvent, sectionId: string): void => {
+    e.preventDefault()
+    const id = draggingId.current || e.dataTransfer.getData('text/plain')
+    if (id) updateCardSection(id, sectionId || undefined)
+    draggingId.current = null
+    setDragOverCol(null)
+  }
+  const clearDrag = (): void => {
+    draggingId.current = null
+    setDragOverCol(null)
+  }
+
+  // Drop one of the student's own pieces of work into the brainstorm box.
+  const boardSeedFrom = (value: string): void => {
+    setTopic((prev) => (prev.trim() ? prev.trim() + ' ' + value : value))
+  }
 
   const onPointerDown = (e: React.PointerEvent, card: Card): void => {
     const rect = canvasRef.current?.getBoundingClientRect()
@@ -67,7 +101,7 @@ export function Board(): JSX.Element {
     const res = await runAi({ task: 'brainstorm', text: value })
     setBusy(false)
     if (res.ok) {
-      addCardsFromText(res.text ?? '')
+      addCardsFromText(res.text ?? '', true)
       setTopic('')
     } else {
       setAiError(res.error ?? 'Something went wrong.')
@@ -132,6 +166,26 @@ export function Board(): JSX.Element {
             >
               {busy ? 'Thinking…' : '💡 Brainstorm'}
             </button>
+            {ctx.thesis && (
+              <button
+                className="chip"
+                data-testid="board-seed-thesis"
+                onClick={() => boardSeedFrom(ctx.thesis)}
+                title="Brainstorm around your thesis"
+              >
+                + my thesis
+              </button>
+            )}
+            {ctx.assignment && (
+              <button
+                className="chip"
+                data-testid="board-seed-assignment"
+                onClick={() => boardSeedFrom(ctx.assignment)}
+                title="Brainstorm from the assignment"
+              >
+                + my assignment
+              </button>
+            )}
           </div>
         )}
         <span className="board-hint muted">
@@ -150,19 +204,52 @@ export function Board(): JSX.Element {
       {byPart ? (
         <div className="board-columns" data-testid="board-columns">
           {[...sections, { id: '', label: 'Unsorted' }].map((col) => {
+            const colKey = col.id || 'unsorted'
             const colCards = cards.filter((c) => (c.section ?? '') === col.id)
             return (
-              <div className="board-column" key={col.id || 'unsorted'} data-testid="board-column">
+              <div
+                className={'board-column' + (dragOverCol === colKey ? ' drag-over' : '')}
+                key={colKey}
+                data-testid="board-column"
+                onDragOver={(e) => onColumnDragOver(e, colKey)}
+                onDrop={(e) => onColumnDrop(e, col.id)}
+              >
                 <div className="board-column-head">
                   <span>{col.label}</span>
                   <span className="board-column-count">{colCards.length}</span>
                 </div>
                 <div className="board-column-body">
                   {colCards.length === 0 && (
-                    <p className="muted small">What goes in “{col.label}”?</p>
+                    <p className="muted small">Drag an idea here — what goes in “{col.label}”?</p>
                   )}
                   {colCards.map((card) => (
                     <div className={'lane-card card-' + card.color} key={card.id} data-testid="board-card">
+                      <div className="lane-card-head">
+                        <span
+                          className="lane-grip"
+                          data-testid="card-grip"
+                          draggable
+                          onDragStart={(e) => onCardDragStart(e, card.id)}
+                          onDragEnd={clearDrag}
+                          title="Drag to another part"
+                          aria-hidden="true"
+                        >
+                          ⠿
+                        </span>
+                        <button
+                          className="card-remove"
+                          onClick={() => removeCard(card.id)}
+                          aria-label="Delete card"
+                          title="Delete card"
+                        >
+                          ×
+                        </button>
+                      </div>
+                      {card.fromAi && (
+                        <span className="ai-badge-card" title="This idea came from the AI helper">
+                          ✦ AI suggestion
+                        </span>
+                      )}
                       <textarea
                         className="card-text"
                         value={card.text}
@@ -174,14 +261,6 @@ export function Board(): JSX.Element {
                         <SectionSelect card={card} />
                         <button className="card-to-outline" onClick={() => sendCardToOutline(card.id)}>
                           → Outline
-                        </button>
-                        <button
-                          className="card-remove"
-                          onClick={() => removeCard(card.id)}
-                          aria-label="Delete card"
-                          title="Delete card"
-                        >
-                          ×
                         </button>
                       </div>
                     </div>
@@ -235,6 +314,11 @@ export function Board(): JSX.Element {
                     ×
                   </button>
                 </div>
+                {card.fromAi && (
+                  <span className="ai-badge-card" title="This idea came from the AI helper">
+                    ✦ AI suggestion
+                  </span>
+                )}
                 <textarea
                   className="card-text"
                   value={card.text}

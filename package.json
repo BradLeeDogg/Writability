@@ -1,11 +1,15 @@
 {
   "name": "writability",
-  "version": "0.1.0",
-  "description": "Writability — a calm, accessibility-first desktop app for writing school and college papers. Local-first, offline, and private.",
+  "version": "0.2.0",
+  "description": "Writability \u2014 a calm, accessibility-first desktop app for writing school and college papers. Local-first, offline, and private.",
   "author": {
     "name": "Writability"
   },
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/BradLeeDogg/Writability.git"
+  },
   "main": "./out/main/index.js",
   "scripts": {
     "dev": "electron-vite dev",
@@ -25,7 +29,10 @@
     "@fontsource/atkinson-hyperlegible": "^5.2.8",
     "@fontsource/opendyslexic": "^5.2.5",
     "better-sqlite3": "^11.10.0",
-    "docx": "^9.7.1"
+    "docx": "^9.7.1",
+    "electron-updater": "^6.8.9",
+    "mammoth": "^1.12.0",
+    "nspell": "^2.1.5"
   },
   "devDependencies": {
     "@tiptap/extension-character-count": "^2.27.2",
@@ -39,6 +46,7 @@
     "@types/react-dom": "^18.3.5",
     "@vitejs/plugin-react": "^4.3.4",
     "cross-env": "^7.0.3",
+    "dictionary-en": "^4.0.0",
     "electron": "^33.4.11",
     "electron-builder": "^25.1.8",
     "electron-vite": "^2.3.0",

@@ -10,3 +10,4 @@ Thumbs.db
 .env.local
 # Local data written by self-test / smoke runs
 .writability-test/
+fixtures/data/

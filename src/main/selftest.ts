@@ -2,22 +2,27 @@ import assert from 'node:assert'
 import { readFileSync, rmSync } from 'fs'
 import { app } from 'electron'
 import { writeJsonAtomic, readJson } from './services/atomic'
-import { createPaper, deletePaper, listPapers, openPaper, savePaper } from './services/papers'
+import { createPaper, deletePaper, listPapers, openPaper, savePaper, listTrash, restorePaper } from './services/papers'
 import { encryptionAvailable, getSettings, saveSettings } from './services/settings'
 import { renderExport } from './services/export'
 import { applyBundle, buildBundle } from './services/backup'
 import { runAiTask } from './services/ai'
 import { dataDir, settingsPath } from './services/paths'
-import { buildPrompt, isValidModel, splitIntoItems } from '@shared/ai'
+import { listSnapshots, restoreSnapshot, snapshotPaper } from './services/snapshots'
+import { convertDocxBuffer } from './services/import'
+import { buildPrompt, isValidModel, splitIntoItems, INTEGRITY_STATEMENT } from '@shared/ai'
 import { analyzeClarity, suggestSentenceSplit } from '@shared/clarity'
-import { decodeAssignment } from '@shared/assignment'
+import { decodeAssignment, needsExpectationsBridge, UNSTATED_EXPECTATIONS } from '@shared/assignment'
 import { outlineToDocContent } from '@shared/scaffold'
 import { TRANSITIONS } from '@shared/transitions'
 import { GLOSSARY, glossaryMap } from '@shared/glossary'
 import { summarizeSource } from '@shared/reading'
-import { formatCitation } from '@shared/citations'
-import { docToPlainText, splitSentences, sentenceIndexAt } from '@shared/doc'
+import { formatCitation, inTextCitation, referenceSegments } from '@shared/citations'
+import { docToPlainText, splitSentences, sentenceIndexAt, splitWords, wordIndexAt, replaceWordInDoc, docToParagraphsWithNotes, collectCitations, citationCounts } from '@shared/doc'
+import { estimatePages, pageStats, WORDS_PER_PAGE, formatSpec, lastNameOf, mlaHeadingLines } from '@shared/format'
 import { coachContext } from '@shared/coach'
+import { pickVoice, sortVoices } from '@shared/voices'
+import { applyCase, confusableFor, looksLikeWord, mergeCustomWord, rankSuggestions } from '@shared/spelling'
 import {
   findThesisNode,
   insertNoteUnder,
@@ -106,6 +111,7 @@ export async function runSelftest(): Promise<void> {
 
     // --- paper create / save / reopen (SQLite + sidecar) ----------------
     const paper = createPaper({ title: 'Self-test paper', essayType: 'argument' })
+    assert.equal(paper.meta.stage, 'draft', 'new papers start in the draft stage')
     assert.ok(paper.meta.id.startsWith('paper-'))
     assert.ok(paper.content.outline.length >= 3)
     // The argument outline nests evidence/analysis under points.
@@ -217,7 +223,65 @@ export async function runSelftest(): Promise<void> {
     assert.ok(decoded.requirements.some((r) => /at least 3 sources/i.test(r)), 'decoder finds source count')
     assert.ok(decoded.requirements.some((r) => /MLA/.test(r)), 'decoder finds citation style')
     assert.ok(decoded.requirements.some((r) => /thesis statement/i.test(r)), 'decoder finds thesis requirement')
+
+    // A rubric (bulleted criteria with point weights) should become a graded-on
+    // checklist — the part that used to be dropped.
+    const rubric = decodeAssignment(
+      'Write a 5-page essay. Your essay should make a clear argument.\n\n' +
+        'Rubric:\n' +
+        '- Thesis: a clear, arguable thesis (20 points)\n' +
+        '- Evidence: at least 4 credible sources (30 points)\n' +
+        '- Mechanics: grammar and spelling (10 points)\n'
+    )
+    assert.ok(
+      rubric.requirements.filter((r) => /^graded on:/i.test(r)).length >= 3,
+      'each rubric row becomes a graded-on item'
+    )
+    assert.ok(rubric.requirements.some((r) => /graded on:.*thesis/i.test(r)), 'rubric criterion text is kept')
+    assert.ok(rubric.requirements.some((r) => /20 points/.test(r)), 'point weights are preserved')
+    assert.ok(
+      rubric.requirements.some((r) => /should make a clear argument/i.test(r)),
+      'prose instructions are still captured alongside the rubric'
+    )
+
+    // Plain bullet points (no rubric heading) are captured as requirements.
+    const bullets = decodeAssignment(
+      'Your essay needs to:\n- discuss two causes\n- include a counterargument\n- end with a conclusion'
+    )
+    assert.ok(bullets.requirements.some((r) => /discuss two causes/i.test(r)), 'plain bullets are captured')
+    // The vague-prompt bridge: command word found but nothing concrete.
+    const vague = decodeAssignment('Discuss the role of memory in Beloved.')
+    assert.ok(needsExpectationsBridge(vague), 'a vague prompt triggers the expectations bridge')
+    assert.ok(!needsExpectationsBridge(decoded), 'a detailed prompt does not trigger the bridge')
+    assert.ok(UNSTATED_EXPECTATIONS.length >= 4, 'bridge has concrete expectation items')
+    assert.ok(UNSTATED_EXPECTATIONS.some((x) => x.ask && x.question), 'bridge includes ask-your-teacher items')
     pass('assignment decoder')
+
+    // --- page estimate for the word-count footer (pure) -----------------
+    assert.equal(estimatePages(0), 0, 'no words -> no pages')
+    assert.equal(estimatePages(1), 1, 'any words -> at least one page')
+    assert.equal(estimatePages(WORDS_PER_PAGE), 1, 'a full page is one page')
+    assert.equal(estimatePages(WORDS_PER_PAGE + 1), 2, 'spilling over rounds up')
+    assert.equal(pageStats(WORDS_PER_PAGE + 50).pages, 2, 'page count for a partial second page')
+    assert.equal(pageStats(WORDS_PER_PAGE + 50).wordsToNextPage, WORDS_PER_PAGE - 50, 'words left to fill the page')
+    assert.equal(pageStats(WORDS_PER_PAGE * 2).wordsToNextPage, 0, 'an exact page boundary needs no more words')
+    pass('page estimate')
+
+    // --- paper format specs (pure) --------------------------------------
+    assert.equal(formatSpec('mla').mlaHeaderBlock, true, 'MLA uses a name block, not a title page')
+    assert.equal(formatSpec('mla').pageNumber, 'mla', 'MLA numbers pages with the surname')
+    assert.equal(formatSpec('apa').titlePage, true, 'APA uses a title page')
+    assert.equal(formatSpec('apa').referenceLabel, 'References', 'APA calls it References')
+    assert.equal(formatSpec('chicago').referenceLabel, 'Bibliography', 'Chicago calls it Bibliography')
+    assert.equal(formatSpec('none').pageNumber, 'none', 'no format = no page numbers')
+    assert.equal(lastNameOf('Ada B. Lovelace'), 'Lovelace', 'surname for the running header')
+    assert.equal(lastNameOf(''), '', 'no name -> empty surname')
+    assert.deepEqual(
+      mlaHeadingLines({ studentName: 'Ada', instructor: 'Mr Babbage', course: '', date: '14 May' }),
+      ['Ada', 'Mr Babbage', '14 May'],
+      'heading lines drop the empty course'
+    )
+    pass('paper format specs')
 
     // --- drafting bridge: scaffold + sentence split + transitions -------
     const scaffold = outlineToDocContent(makeOutline('argument'))
@@ -297,14 +361,121 @@ export async function runSelftest(): Promise<void> {
       'chicago'
     )
     assert.ok(chicago.reference.includes('A Web Page'))
+    // Italic segments: titles/containers are marked for italic rendering.
+    const bookSegs = referenceSegments(
+      { id: 'b', type: 'book', authors: ['Smith, John'], title: 'A Serious Book', publisher: 'University Press', year: '2020' },
+      'mla'
+    )
+    assert.ok(bookSegs.some((x) => x.italic && x.text === 'A Serious Book'), 'book title segment is italic')
+    const journalSegs = referenceSegments(
+      { id: 'j', type: 'journal', authors: ['Lee, Ann'], title: 'On Memory', containerTitle: 'Journal of Studies', volume: '12', year: '2019' },
+      'apa'
+    )
+    assert.ok(journalSegs.some((x) => x.italic && x.text === 'Journal of Studies'), 'journal name segment is italic (APA)')
+    assert.ok(journalSegs.some((x) => x.italic && x.text === '12'), 'APA journal volume is italic')
+    assert.ok(!journalSegs.some((x) => x.italic && x.text.includes('On Memory')), 'article title stays roman')
     pass('citations (mla/apa/chicago)')
+
+    // --- in-text citations: the quoted page, and how it reads ------------
+    const quoted = {
+      id: 'src-q',
+      type: 'journal' as const,
+      authors: ['Ng, Priya'],
+      title: 'On Memory',
+      containerTitle: 'Journal of Studies',
+      volume: '12',
+      pages: '33-47',
+      year: '2019'
+    }
+    // The source's own page range is the extent of the whole article; it belongs
+    // in the reference entry and must never become the in-text locator.
+    assert.equal(inTextCitation(quoted, 'mla'), '(Ng)', 'no locator unless the student gives one')
+    assert.equal(inTextCitation(quoted, 'mla', { page: '42' }), '(Ng 42)')
+    assert.equal(inTextCitation(quoted, 'apa', { page: '42' }), '(Ng, 2019, p. 42)')
+    assert.equal(inTextCitation(quoted, 'apa', { page: '42-45' }), '(Ng, 2019, pp. 42-45)', 'a range takes pp.')
+    assert.equal(inTextCitation(quoted, 'chicago', { page: '42' }), '(Ng 2019, 42)')
+    // Narrative form lifts the author out of the brackets and into the prose.
+    assert.equal(inTextCitation(quoted, 'mla', { page: '42', form: 'narrative' }), 'Ng (42)')
+    assert.equal(inTextCitation(quoted, 'apa', { page: '42', form: 'narrative' }), 'Ng (2019, p. 42)')
+    assert.equal(inTextCitation(quoted, 'mla', { form: 'narrative' }), 'Ng')
+    // Typing "p. 42" or "pages 42" lands in the same place as typing "42".
+    assert.equal(inTextCitation(quoted, 'mla', { page: 'p. 42' }), '(Ng 42)')
+    assert.equal(inTextCitation(quoted, 'apa', { page: 'pages 42' }), '(Ng, 2019, p. 42)')
+
+    const citeDoc = {
+      type: 'doc',
+      content: [
+        {
+          type: 'paragraph',
+          content: [
+            { type: 'text', text: 'Memory is malleable ' },
+            { type: 'citation', attrs: { sourceId: 'src-q', page: '42', form: 'parenthetical', label: '(Ng 42)' } },
+            { type: 'text', text: '.' }
+          ]
+        },
+        {
+          type: 'paragraph',
+          content: [
+            { type: 'citation', attrs: { sourceId: 'src-q', page: '7', form: 'narrative', label: 'Ng (7)' } },
+            { type: 'text', text: ' argues the opposite.' },
+            { type: 'citation', attrs: { sourceId: 'src-gone', page: '', form: 'parenthetical', label: '(Vanished 3)' } }
+          ]
+        }
+      ]
+    }
+    assert.equal(collectCitations(citeDoc).length, 3, 'every citation is collected in order')
+    assert.equal(citationCounts(citeDoc)['src-q'], 2, 'a source cited twice counts twice')
+
+    const citePaper = createPaper({ title: 'Cited paper', essayType: 'research' })
+    citePaper.content.doc = citeDoc
+    citePaper.content.sources = [quoted]
+    savePaper({ meta: { ...citePaper.meta, format: 'mla' }, content: citePaper.content })
+    const citeMla = (await renderExport(openPaper(citePaper.meta.id)!, 'txt')).toString('utf8')
+    assert.ok(citeMla.includes('(Ng 42)'), 'MLA export renders the in-text marker')
+    assert.ok(citeMla.includes('Ng (7) argues'), 'a narrative marker keeps the author in the sentence')
+    assert.ok(citeMla.includes('(Vanished 3)'), 'a citation whose source was deleted keeps its last-known text')
+
+    // The marker is an object, not typed characters, so restyling the paper
+    // restyles every citation in it.
+    savePaper({ meta: { ...citePaper.meta, format: 'apa' }, content: citePaper.content })
+    const citeApa = (await renderExport(openPaper(citePaper.meta.id)!, 'txt')).toString('utf8')
+    assert.ok(citeApa.includes('(Ng, 2019, p. 42)'), 'switching the paper to APA restyles the marker')
+    assert.ok(!citeApa.includes('(Ng 42)'), 'the old MLA marker is gone, not left behind')
+    const citeDocx = await renderExport(openPaper(citePaper.meta.id)!, 'docx')
+    assert.ok(citeDocx.length > 100, 'docx with citations renders')
+
+    // Read-aloud says the citation instead of stumbling over brackets.
+    const spokenCite = docToPlainText(citeDoc, { spokenCitations: true })
+    assert.ok(spokenCite.includes('citation: Ng 42'), 'read-aloud speaks the citation as words')
+    assert.ok(!spokenCite.includes('(Ng 42)'), 'read-aloud does not read the brackets aloud')
+    assert.ok(docToPlainText(citeDoc).includes('(Ng 42)'), 'on the page it still reads as a normal marker')
+    pass('in-text citations (page, form, restyle, export)')
 
     // --- export ---------------------------------------------------------
     const docxBytes = await renderExport(reopened!, 'docx')
     assert.ok(docxBytes.length > 100, 'docx export non-empty')
     const txtBytes = await renderExport(reopened!, 'txt')
     assert.ok(txtBytes.toString('utf8').includes('Hello world'), 'txt export has prose')
-    pass('export (docx + txt)')
+
+    // Format-aware export: an MLA paper carries its heading block, and each
+    // format renders to docx without throwing.
+    const mlaPaper: typeof reopened = {
+      ...reopened!,
+      meta: {
+        ...reopened!.meta,
+        format: 'mla',
+        pageNumbers: true,
+        heading: { studentName: 'Ada Lovelace', instructor: 'Mr Babbage', course: 'History 101', date: '14 May 2026' }
+      }
+    }
+    const mlaTxt = (await renderExport(mlaPaper, 'txt')).toString('utf8')
+    assert.ok(mlaTxt.includes('Ada Lovelace'), 'MLA txt includes the heading name')
+    assert.ok(mlaTxt.includes('Mr Babbage'), 'MLA txt includes the instructor')
+    for (const fmt of ['mla', 'apa', 'chicago', 'none'] as const) {
+      const bytes = await renderExport({ ...mlaPaper, meta: { ...mlaPaper.meta, format: fmt } }, 'docx')
+      assert.ok(bytes.length > 100, `${fmt} docx export is produced`)
+    }
+    pass('export (format-aware docx + txt)')
 
     // --- backup round-trip ----------------------------------------------
     const bkPaper = createPaper({ title: 'Backup me', essayType: 'reflection' })
@@ -383,6 +554,72 @@ export async function runSelftest(): Promise<void> {
     assert.equal(splitSentences('A fragment with no end').length, 1, 'a fragment is one sentence')
     pass('read-aloud sentence splitting')
 
+    // --- read-aloud word splitting (pure, for karaoke highlighting) -----
+    const words = splitWords('The cat sat.\n\nIt purred.')
+    assert.equal(words.length, 5, 'words are non-whitespace runs across breaks')
+    assert.equal(words[0].text, 'The')
+    assert.equal(words[2].text, 'sat.', 'trailing punctuation stays on the word')
+    assert.equal(words[0].start, 0)
+    assert.equal(words[1].start, 4, 'words carry source offsets')
+    assert.equal(wordIndexAt(words, 5), 1, 'an offset inside the second word maps to it')
+    assert.equal(wordIndexAt(words, 0), 0, 'offset 0 maps to the first word')
+    assert.deepEqual(splitWords('   '), [], 'whitespace-only yields no words')
+    pass('read-aloud word splitting')
+
+    // --- read-aloud voice selection (pure) ------------------------------
+    const voiceList = [
+      { voiceURI: 'fr1', name: 'Thomas', lang: 'fr-FR', localService: true },
+      { voiceURI: 'en2', name: 'Zira', lang: 'en-US', localService: false },
+      { voiceURI: 'en1', name: 'David', lang: 'en-US', localService: true }
+    ]
+    const ordered = sortVoices(voiceList)
+    assert.equal(ordered[0].name, 'David', 'English + offline voice sorts first')
+    assert.equal(ordered[1].name, 'Zira', 'English (remote) comes next')
+    assert.equal(ordered[2].name, 'Thomas', 'non-English voice sorts last')
+    assert.equal(pickVoice(voiceList, 'en2')?.name, 'Zira', 'pick by voiceURI')
+    assert.equal(pickVoice(voiceList, 'David')?.name, 'David', 'fall back to a name match')
+    assert.equal(pickVoice(voiceList, 'nope'), undefined, 'unknown preference uses engine default')
+    assert.equal(pickVoice([], 'en1'), undefined, 'no voices -> engine default')
+    pass('read-aloud voice selection')
+
+    // --- gentle spelling helpers (pure) ---------------------------------
+    assert.equal(looksLikeWord('because'), true, 'a normal word is checkable')
+    assert.equal(looksLikeWord('I'), false, 'single letters are skipped')
+    assert.equal(looksLikeWord('NASA'), false, 'acronyms are skipped')
+    assert.equal(looksLikeWord('cat5'), false, 'words with digits are skipped')
+    assert.equal(looksLikeWord("don't"), true, 'apostrophes are allowed')
+    const conf = confusableFor('There')
+    assert.ok(conf && conf.alternatives.includes('their'), 'confusable lookup is case-insensitive')
+    assert.ok(conf && conf.hint.length > 0, 'confusable carries a hint')
+    assert.equal(confusableFor('elephant'), undefined, 'non-confusable words return nothing')
+    const ranked = rankSuggestions('skool', ['school', 'skoal', 'dribble', 'stool'])
+    assert.equal(ranked[0], 'school', 'same-first-letter suggestions keep the dictionary order')
+    assert.equal(ranked[ranked.length - 1], 'dribble', 'a different first letter is de-prioritised')
+    assert.equal(applyCase('Becuase', 'because'), 'Because', 'capitalised words keep their capital')
+    assert.equal(applyCase('HELLO', 'hello'), 'HELLO', 'all-caps stays all-caps')
+    assert.equal(applyCase('cat', 'cats'), 'cats', 'lowercase stays lowercase')
+    // personal dictionary merge
+    assert.deepEqual(mergeCustomWord([], 'Zylphard'), ['zylphard'], 'a new word is stored lowercased')
+    assert.deepEqual(mergeCustomWord(['zylphard'], 'ZYLPHARD'), ['zylphard'], 'duplicates are ignored (case-insensitive)')
+    assert.deepEqual(mergeCustomWord(['a'], 'b2'), ['a'], 'words with digits are rejected')
+    assert.deepEqual(mergeCustomWord(['a'], '   '), ['a'], 'blank input is rejected')
+    pass('gentle spelling helpers')
+
+    // --- whole-paper "fix everywhere" (pure) ----------------------------
+    const spellDoc = {
+      type: 'doc',
+      content: [
+        { type: 'paragraph', content: [{ type: 'text', text: 'I beleive it. Beleive me, beleives differ.' }] }
+      ]
+    }
+    const fixedDoc = replaceWordInDoc(spellDoc, 'beleive', 'believe')
+    const fixedText = docToPlainText(fixedDoc)
+    assert.ok(fixedText.includes('I believe it.'), 'replaces an occurrence')
+    assert.ok(fixedText.includes('Believe me'), 'preserves capitalisation of each occurrence')
+    assert.ok(fixedText.includes('beleives differ'), 'leaves different words (substrings) alone')
+    assert.equal(docToPlainText(spellDoc).includes('beleive'), true, 'the original doc is not mutated')
+    pass('fix spelling everywhere')
+
     // --- promote board cards into outline sections (pure) ---------------
     const baseOutline = makeOutline('argument')
     const sectionId = baseOutline[1].id // "Point 1"
@@ -434,6 +671,107 @@ export async function runSelftest(): Promise<void> {
     deletePaper(paper.meta.id)
     assert.equal(openPaper(paper.meta.id), null, 'paper deleted')
     pass('delete paper')
+
+    // --- trash: delete moves to trash, restore brings it back -----------
+    const trPaper = createPaper({ title: 'Trash me', essayType: 'argument' })
+    deletePaper(trPaper.meta.id)
+    assert.ok(!listPapers().some((p) => p.id === trPaper.meta.id), 'deleted paper leaves the library')
+    assert.ok(listTrash().some((p) => p.id === trPaper.meta.id), 'deleted paper appears in the trash')
+    assert.equal(restorePaper(trPaper.meta.id).ok, true, 'restore succeeds')
+    assert.ok(listPapers().some((p) => p.id === trPaper.meta.id), 'restored paper is back in the library')
+    assert.ok(!listTrash().some((p) => p.id === trPaper.meta.id), 'restored paper leaves the trash')
+    pass('trash round-trip')
+
+    // --- snapshots: quiet history, restore never loses anything ---------
+    const snapPaper = createPaper({ title: 'Snapshot me', essayType: 'argument' })
+    snapPaper.content.doc = { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'version one' }] }] }
+    savePaper({ meta: snapPaper.meta, content: snapPaper.content })
+    const snap1 = snapshotPaper(snapPaper.meta.id)
+    assert.ok(snap1, 'snapshot is written')
+    snapPaper.content.doc = { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'version two' }] }] }
+    savePaper({ meta: snapPaper.meta, content: snapPaper.content })
+    assert.equal(restoreSnapshot(snapPaper.meta.id, snap1!.file).ok, true, 'restore succeeds')
+    const snapRestored = openPaper(snapPaper.meta.id)
+    assert.ok(docToPlainText(snapRestored!.content.doc).includes('version one'), 'restore brings back the old text')
+    assert.ok(listSnapshots(snapPaper.meta.id).length >= 2, 'restoring snapshots the pre-restore state first')
+    for (let i = 0; i < 25; i++) snapshotPaper(snapPaper.meta.id)
+    assert.ok(listSnapshots(snapPaper.meta.id).length <= 20, 'old snapshots are pruned to the newest 20')
+    pass('snapshots (history + restore + prune)')
+
+    // --- docx import: golden round-trip through mammoth ------------------
+    {
+      const { Document, HeadingLevel, Packer, Paragraph, TextRun } = await import('docx')
+      const golden = new Document({
+        sections: [
+          {
+            children: [
+              new Paragraph({ text: 'Imported Heading', heading: HeadingLevel.HEADING_1 }),
+              new Paragraph({
+                children: [
+                  new TextRun('Plain, '),
+                  new TextRun({ text: 'bold', bold: true }),
+                  new TextRun(' and '),
+                  new TextRun({ text: 'italic', italics: true }),
+                  new TextRun('.')
+                ]
+              })
+            ]
+          }
+        ]
+      })
+      const buf = (await Packer.toBuffer(golden)) as Buffer
+      const conv = await convertDocxBuffer(buf)
+      assert.ok(/Imported Heading/.test(conv.html), 'import keeps heading text')
+      assert.ok(/<h1/.test(conv.html), 'import keeps heading structure')
+      assert.ok(/<strong>bold<\/strong>/.test(conv.html), 'import keeps bold')
+      assert.ok(/<em>italic<\/em>/.test(conv.html), 'import keeps italics')
+      assert.ok(conv.kept.includes('Bold') && conv.kept.includes('Italics'), 'fidelity report lists what survived')
+      pass('docx import (golden round-trip)')
+    }
+
+    // --- footnotes: segmentation + real Word footnotes -------------------
+    const fnDoc = {
+      type: 'doc',
+      content: [
+        {
+          type: 'paragraph',
+          content: [
+            { type: 'text', text: 'A claim' },
+            { type: 'footnote', attrs: { text: 'See Smith, p. 12.' } },
+            { type: 'text', text: ' and more.' }
+          ]
+        },
+        {
+          type: 'paragraph',
+          content: [
+            { type: 'text', text: 'Second point' },
+            { type: 'footnote', attrs: { text: 'Archive citation.' } }
+          ]
+        }
+      ]
+    }
+    const fnFlat = docToParagraphsWithNotes(fnDoc)
+    assert.equal(fnFlat.notes.length, 2, 'both footnotes collected in order')
+    assert.equal(fnFlat.notes[0], 'See Smith, p. 12.')
+    assert.ok(
+      fnFlat.paragraphs[0].some((seg) => 'footnote' in seg && seg.footnote === 1),
+      'marker 1 sits in the first paragraph'
+    )
+    assert.ok(!docToPlainText(fnDoc).includes('Smith'), 'plain text (read-aloud) skips note bodies')
+    const fnPaper = createPaper({ title: 'Footnote paper', essayType: 'research' })
+    fnPaper.content.doc = fnDoc
+    savePaper({ meta: { ...fnPaper.meta, format: 'chicago' }, content: fnPaper.content })
+    const fnDocx = await renderExport(openPaper(fnPaper.meta.id)!, 'docx')
+    assert.ok(fnDocx.length > 100, 'docx with footnotes renders')
+    const fnTxt = (await renderExport(openPaper(fnPaper.meta.id)!, 'txt')).toString('utf8')
+    assert.ok(fnTxt.includes('[1]') && fnTxt.includes('[1] See Smith, p. 12.'), 'txt export numbers the notes')
+    pass('footnotes (segments + export)')
+
+    // --- tone pins: overdue copy stays factual and kind; AI contract ----
+    assert.ok(overdue && /Pick one step and start there/.test(overdue.message), 'overdue copy offers a next step, not guilt')
+    assert.ok(!/overdue!|late!|hurry/i.test(overdue!.message), 'overdue copy has no alarm language')
+    assert.ok(/never writes your thesis/i.test(INTEGRITY_STATEMENT), 'integrity statement states the no-ghostwriting contract')
+    pass('tone pins (overdue + AI contract)')
 
     console.log(`SELFTEST_OK (${checks.length} checks: ${checks.join(', ')})`)
     cleanup()
