@@ -7,7 +7,31 @@ import { applyCase, normalizeWord } from './spelling'
 interface DocNode {
   type?: string
   text?: string
+  attrs?: CitationAttrs & { text?: string }
   content?: DocNode[]
+}
+
+/** Attributes carried by an inline `citation` node. */
+export interface CitationAttrs {
+  /** Which source in the paper's list this points at. */
+  sourceId?: string
+  /** The page this particular quote came from (may be blank). */
+  page?: string
+  form?: 'parenthetical' | 'narrative'
+  /**
+   * The marker text as last rendered. Authoritative rendering always comes from
+   * the source + the paper's style; this is the fallback for when the source has
+   * since been deleted, so a citation never silently becomes empty.
+   */
+  label?: string
+}
+
+/** Resolves a citation node to its marker text, or null if the source is gone. */
+export type CitationResolver = (attrs: CitationAttrs) => string | null
+
+function citationText(node: DocNode, resolve?: CitationResolver): string {
+  const attrs = (node.attrs ?? {}) as CitationAttrs
+  return (resolve ? resolve(attrs) : null) ?? attrs.label ?? ''
 }
 
 const BLOCK_TYPES = new Set([
@@ -20,8 +44,18 @@ const BLOCK_TYPES = new Set([
   'codeBlock'
 ])
 
+export interface PlainTextOptions {
+  /** Resolve citation markers live from the paper's sources. */
+  resolveCitation?: CitationResolver
+  /**
+   * Speak citations as words rather than punctuation — "(Smith 42)" read aloud
+   * is a stumble, "citation: Smith 42" is a checkable fact.
+   */
+  spokenCitations?: boolean
+}
+
 /** Flatten a TipTap doc to plain text, with blank lines between blocks. */
-export function docToPlainText(doc: unknown): string {
+export function docToPlainText(doc: unknown, opts: PlainTextOptions = {}): string {
   const root = doc as DocNode | null | undefined
   if (!root || typeof root !== 'object') return ''
 
@@ -37,6 +71,12 @@ export function docToPlainText(doc: unknown): string {
 
   const collectInline = (node: DocNode): string => {
     if (node.type === 'footnote') return '' // notes are exported, not read aloud
+    if (node.type === 'citation') {
+      const marker = citationText(node, opts.resolveCitation)
+      if (!opts.spokenCitations) return marker
+      const bare = marker.replace(/[()]/g, '').trim()
+      return bare ? `citation: ${bare}` : ''
+    }
     if (node.text) return node.text
     if (!node.content) return ''
     return node.content.map(collectInline).join('')
@@ -52,6 +92,30 @@ export function docToParagraphs(doc: unknown): string[] {
     .split('\n\n')
     .map((p) => p.trim())
     .filter(Boolean)
+}
+
+/** Every citation in the document, in order — for "have I actually cited this?". */
+export function collectCitations(doc: unknown): CitationAttrs[] {
+  const out: CitationAttrs[] = []
+  const walk = (node: DocNode): void => {
+    if (!node || typeof node !== 'object') return
+    if (node.type === 'citation') {
+      out.push({ ...((node.attrs ?? {}) as CitationAttrs) })
+      return
+    }
+    for (const child of node.content ?? []) walk(child)
+  }
+  walk(doc as DocNode)
+  return out
+}
+
+/** How many times each source is cited, keyed by source id. */
+export function citationCounts(doc: unknown): Record<string, number> {
+  const counts: Record<string, number> = {}
+  for (const c of collectCitations(doc)) {
+    if (c.sourceId) counts[c.sourceId] = (counts[c.sourceId] ?? 0) + 1
+  }
+  return counts
 }
 
 export function countWords(text: string): number {
@@ -190,15 +254,17 @@ export interface DocWithNotes {
 interface FnNode {
   type?: string
   text?: string
-  attrs?: { text?: string }
+  attrs?: CitationAttrs & { text?: string }
   content?: FnNode[]
 }
 
 const FN_BLOCKS = new Set(['paragraph', 'heading', 'blockquote', 'listItem', 'codeBlock'])
 
 /** Flatten a doc into paragraph segments plus an ordered footnote list, so the
- *  exporters can place real footnote references. Pure and schema-tolerant. */
-export function docToParagraphsWithNotes(doc: unknown): DocWithNotes {
+ *  exporters can place real footnote references. Pure and schema-tolerant.
+ *  Citations flatten to plain text — resolved from the live sources when a
+ *  resolver is supplied, so an exported paper never carries a stale marker. */
+export function docToParagraphsWithNotes(doc: unknown, resolveCitation?: CitationResolver): DocWithNotes {
   const notes: string[] = []
   const paragraphs: ParaSegment[][] = []
   const root = doc as FnNode | null | undefined
@@ -208,6 +274,11 @@ export function docToParagraphsWithNotes(doc: unknown): DocWithNotes {
     if (node.type === 'footnote') {
       notes.push((node.attrs?.text ?? '').trim())
       out.push({ footnote: notes.length })
+      return
+    }
+    if (node.type === 'citation') {
+      const marker = citationText(node, resolveCitation)
+      if (marker) out.push({ text: marker })
       return
     }
     if (node.text) {

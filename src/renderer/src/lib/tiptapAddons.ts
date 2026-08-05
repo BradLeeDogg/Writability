@@ -278,3 +278,77 @@ export const Footnote = Node.create({
     return ['sup', { 'data-footnote': node.attrs.text as string, class: 'fn-ref', title: node.attrs.text as string }]
   }
 })
+
+// --- Citation: an inline, atomic in-text citation marker ---------------------
+// The marker is an *object*, not typed characters: it remembers which source it
+// points at and which page, and its text is re-rendered from the paper's current
+// style. That means switching MLA -> APA updates every marker, one backspace
+// removes a whole marker rather than half of one, and the app can answer "which
+// sources have I actually cited?".
+export const Citation = Node.create({
+  name: 'citation',
+  group: 'inline',
+  inline: true,
+  atom: true,
+  selectable: true,
+  addAttributes() {
+    return {
+      sourceId: {
+        default: '',
+        parseHTML: (el) => el.getAttribute('data-citation') ?? '',
+        renderHTML: (attrs) => ({ 'data-citation': attrs.sourceId as string })
+      },
+      page: {
+        default: '',
+        parseHTML: (el) => el.getAttribute('data-page') ?? '',
+        renderHTML: (attrs) => ({ 'data-page': attrs.page as string })
+      },
+      form: {
+        default: 'parenthetical',
+        parseHTML: (el) => el.getAttribute('data-form') ?? 'parenthetical',
+        renderHTML: (attrs) => ({ 'data-form': attrs.form as string })
+      },
+      label: {
+        default: '',
+        parseHTML: (el) => el.textContent ?? '',
+        renderHTML: () => ({})
+      }
+    }
+  },
+  parseHTML() {
+    return [{ tag: 'span[data-citation]' }]
+  },
+  renderHTML({ HTMLAttributes, node }) {
+    const label = (node.attrs.label as string) || ''
+    return [
+      'span',
+      {
+        ...HTMLAttributes,
+        class: 'cite-ref',
+        title: 'Citation — click it (or select it and press Enter) to change the page or the source',
+        'aria-label': `Citation: ${label}`
+      },
+      label
+    ]
+  }
+})
+
+/** Recompute every citation's label from the live sources; returns the updated
+ *  doc, or null when nothing changed (so we never dispatch a pointless edit). */
+export function relabelCitations(
+  doc: PMNode,
+  render: (attrs: { sourceId: string; page: string; form: string }) => string | null
+): { pos: number; label: string }[] {
+  const updates: { pos: number; label: string }[] = []
+  doc.descendants((node, pos) => {
+    if (node.type.name !== 'citation') return
+    const next = render({
+      sourceId: (node.attrs.sourceId as string) ?? '',
+      page: (node.attrs.page as string) ?? '',
+      form: (node.attrs.form as string) ?? 'parenthetical'
+    })
+    // A missing source keeps its last-known label rather than vanishing.
+    if (next !== null && next !== node.attrs.label) updates.push({ pos, label: next })
+  })
+  return updates
+}

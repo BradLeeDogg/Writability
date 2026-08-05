@@ -195,6 +195,8 @@ export interface AppSettings {
   typeCounts?: Record<string, number>
   /** True once the student has said "no thanks" to the start-leaner nudge. */
   leanNudgeDismissed?: boolean
+  /** Offer a citation after pasting a long passage. Defaults to on. */
+  pasteCitePrompt?: boolean
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {

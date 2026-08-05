@@ -2034,6 +2034,83 @@ input[type='range'] {
   gap: 0.35rem;
   flex-wrap: wrap;
 }
+
+/* Citation details step: one question at a time, with a live preview */
+.cite-details {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  width: 100%;
+}
+.cite-page-field input {
+  max-width: 340px;
+}
+.cite-form-field legend,
+.cite-frame-field legend {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  padding: 0;
+  margin-bottom: 0.3rem;
+}
+.cite-preview {
+  margin: 0;
+  padding: 0.45rem 0.6rem;
+  border-radius: 8px;
+  background: var(--surface-2, rgba(127, 127, 127, 0.08));
+  border: 1px solid var(--border);
+}
+.cite-preview-text {
+  font-weight: 600;
+}
+
+/* In-text citation markers: visibly one object, not loose characters */
+.prose span.cite-ref {
+  cursor: pointer;
+  border-radius: 4px;
+  padding: 0 0.12em;
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  box-shadow: inset 0 -1px 0 color-mix(in srgb, var(--accent) 45%, transparent);
+  white-space: nowrap;
+}
+.prose span.cite-ref:hover {
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+}
+.prose span.cite-ref.ProseMirror-selectednode {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* Paste guard: an offer, never a block */
+.paste-cite-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+.paste-cite-text {
+  flex: 1 1 16rem;
+}
+
+/* "Have I actually cited this?" */
+.used-summary {
+  margin: 0 0 0.5rem;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+.used-badge {
+  margin-left: 0.5rem;
+  padding: 0.05rem 0.4rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
+  color: var(--text);
+  white-space: nowrap;
+}
+.used-badge.unused {
+  background: transparent;
+  border: 1px dashed var(--border);
+  color: var(--text-muted);
+}
 .lean-nudge {
   font-size: 0.85rem;
   color: var(--text-muted);

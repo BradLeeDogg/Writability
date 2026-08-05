@@ -8,16 +8,23 @@ import { useStore } from '../store/useStore'
 import { ThesisPin } from './ThesisPin'
 import { SpellPopover } from './SpellPopover'
 import type { SpellTarget } from './SpellPopover'
-import { Spotlight, spotlightKey, Glossary, glossaryKey, Spellcheck, spellcheckKey, Find, findKey, findMatches, Footnote } from '../lib/tiptapAddons'
+import { Spotlight, spotlightKey, Glossary, glossaryKey, Spellcheck, spellcheckKey, Find, findKey, findMatches, Footnote, Citation, relabelCitations } from '../lib/tiptapAddons'
 import { ensureSpell, setCustomWords } from '../lib/spell'
 import { outlineToDocContent } from '@shared/scaffold'
 import { TRANSITIONS } from '@shared/transitions'
 import { pageStats, citationStyleFor } from '@shared/format'
-import { formatCitation } from '@shared/citations'
+import { inTextCitation, SIGNAL_PHRASES } from '@shared/citations'
+import type { CiteForm } from '@shared/citations'
+import { countWords } from '@shared/doc'
 import { nextAction } from '@shared/planner'
 
 // Papers whose re-entry card was dismissed this session.
 const reentryDismissed = new Set<string>()
+
+// A paste this long probably came from a source rather than the student's own
+// notes, so it is worth offering the citation. Short enough to catch a quoted
+// sentence, long enough not to fire on a pasted word or title.
+const PASTE_CITE_WORDS = 15
 
 export function Editor(): JSX.Element {
   // App only mounts the Editor when a paper is open.
@@ -33,8 +40,15 @@ export function Editor(): JSX.Element {
   const setEditorInstance = useStore((s) => s.setEditorInstance)
   const setScratch = useStore((s) => s.setScratch)
   const showToast = useStore((s) => s.showToast)
+  const updateSettings = useStore((s) => s.updateSettings)
   const stage = current.meta.stage ?? 'polish'
   const drafting = stage === 'draft'
+
+  // Set by the paste handler below; rendered as a dismissible offer, never a modal.
+  const [pasteHint, setPasteHint] = useState<string | null>(null)
+  // Assigned once the flow below is defined, so the editor's key handler can
+  // reach it without depending on declaration order.
+  const openCiteEditRef = useRef<((pos: number, attrs: Record<string, unknown>) => void) | null>(null)
 
   const editor = useEditor({
     extensions: [
@@ -48,7 +62,8 @@ export function Editor(): JSX.Element {
       Glossary,
       Spellcheck,
       Find,
-      Footnote
+      Footnote,
+      Citation
     ],
     content: current.content.doc as never,
     autofocus: 'end',
@@ -58,6 +73,29 @@ export function Editor(): JSX.Element {
         'aria-label': 'Paper text',
         role: 'textbox',
         'aria-multiline': 'true'
+      },
+      // Pasting a chunk of text is the most common way source material ends up
+      // uncited by accident. Offer the citation right then — never block the
+      // paste, and never nag if the student has said no.
+      handlePaste: (_view, event) => {
+        const pasted = event.clipboardData?.getData('text/plain') ?? ''
+        if (
+          countWords(pasted) >= PASTE_CITE_WORDS &&
+          useStore.getState().settings.pasteCitePrompt !== false
+        ) {
+          setPasteHint(pasted.replace(/\s+/g, ' ').trim().slice(0, 140))
+        }
+        return false
+      },
+      // Arrowing onto a citation selects it; Enter then opens it for correction,
+      // so a marker can be fixed without a mouse.
+      handleKeyDown: (view, event) => {
+        if (event.key !== 'Enter') return false
+        const sel = view.state.selection as { node?: { type: { name: string }; attrs: Record<string, unknown> } }
+        if (sel.node?.type.name !== 'citation') return false
+        event.preventDefault()
+        openCiteEditRef.current?.(view.state.selection.from, sel.node.attrs)
+        return true
       }
     },
     onUpdate: ({ editor: ed }) => setDoc(ed.getJSON())
@@ -121,6 +159,24 @@ export function Editor(): JSX.Element {
     if (fn) {
       const pos = editor.view.posAtDOM(fn, 0) - 1
       openFootnote(pos, fn.getAttribute('data-footnote') ?? '')
+      return
+    }
+    const citeEl = (e.target as HTMLElement).closest('span.cite-ref') as HTMLElement | null
+    if (citeEl) {
+      // Match the rendered element back to its node exactly — the marker has a
+      // text child, so position arithmetic off the DOM is not reliable here.
+      let citePos = -1
+      let citeAttrs: Record<string, unknown> = {}
+      editor.state.doc.descendants((node, pos) => {
+        if (citePos !== -1) return false
+        if (node.type.name === 'citation' && editor.view.nodeDOM(pos) === citeEl) {
+          citePos = pos
+          citeAttrs = node.attrs
+          return false
+        }
+        return undefined
+      })
+      if (citePos !== -1) openCiteEdit(citePos, citeAttrs)
       return
     }
     const el = (e.target as HTMLElement).closest('.pm-misspelled, .pm-confusable') as HTMLElement | null
@@ -243,34 +299,139 @@ export function Editor(): JSX.Element {
     setFnEditPos(null)
   }
 
-  // Insert-citation popover (Ctrl/Cmd+Shift+C): pick a source, Enter drops the
-  // in-text citation at the cursor — no tab switch, no retyping.
+  // Insert-citation flow (the Cite button, or Ctrl/Cmd+Shift+C). Two small
+  // steps, one question each: *which source*, then *which page and how should
+  // it read*. The marker goes in as an object, so it can be corrected later by
+  // clicking it rather than by editing text inside brackets.
+  const sources = current.content.sources
   const [citeOpen, setCiteOpen] = useState(false)
+  const [citeStep, setCiteStep] = useState<'pick' | 'details'>('pick')
   const [citeQuery, setCiteQuery] = useState('')
   const [citeActive, setCiteActive] = useState(0)
+  const [citeSourceId, setCiteSourceId] = useState('')
+  const [citePage, setCitePage] = useState('')
+  const [citeForm, setCiteForm] = useState<CiteForm>('parenthetical')
+  const [citeFrame, setCiteFrame] = useState(-1)
+  const [citeEditPos, setCiteEditPos] = useState<number | null>(null)
   const citeRef = useRef<HTMLInputElement>(null)
+  const citePageRef = useRef<HTMLInputElement>(null)
   const citeStyle = citationStyleFor(current.meta.format ?? 'none')
   const citeMatches = useMemo(() => {
     const q = citeQuery.trim().toLowerCase()
-    const list = current.content.sources
-    if (!q) return list
-    return list.filter((src) =>
+    if (!q) return sources
+    return sources.filter((src) =>
       [src.title, src.authors.join(' '), src.year ?? ''].join(' ').toLowerCase().includes(q)
     )
-  }, [current.content.sources, citeQuery])
+  }, [sources, citeQuery])
+
+  const citeSource = sources.find((s) => s.id === citeSourceId) ?? null
+  const citePreview = citeSource
+    ? inTextCitation(citeSource, citeStyle, { page: citePage, form: citeForm })
+    : ''
+
+  const closeCite = (): void => {
+    setCiteOpen(false)
+    setCiteEditPos(null)
+    setCiteFrame(-1)
+    editor?.commands.focus()
+  }
+
   const openCite = (): void => {
     setCiteOpen(true)
+    setCiteStep('pick')
     setCiteQuery('')
     setCiteActive(0)
+    setCiteSourceId('')
+    setCitePage('')
+    setCiteForm('parenthetical')
+    setCiteFrame(-1)
+    setCiteEditPos(null)
     setTimeout(() => citeRef.current?.focus(), 0)
   }
-  const insertCite = (idx: number): void => {
-    const src = citeMatches[idx]
-    if (src && editor) {
-      editor.chain().focus().insertContent(formatCitation(src, citeStyle).inText + ' ').run()
-    }
-    setCiteOpen(false)
+
+  /** Clicking an existing marker reopens the flow on its details step. */
+  const openCiteEdit = (pos: number, attrs: Record<string, unknown>): void => {
+    setCiteOpen(true)
+    setCiteStep('details')
+    setCiteEditPos(pos)
+    setCiteSourceId((attrs.sourceId as string) ?? '')
+    setCitePage((attrs.page as string) ?? '')
+    setCiteForm(((attrs.form as CiteForm) ?? 'parenthetical') as CiteForm)
+    setCiteFrame(-1)
+    setTimeout(() => citePageRef.current?.focus(), 0)
   }
+  openCiteEditRef.current = openCiteEdit
+
+  const chooseSource = (idx: number): void => {
+    const src = citeMatches[idx]
+    if (!src) return
+    setCiteSourceId(src.id)
+    setCiteStep('details')
+    setTimeout(() => citePageRef.current?.focus(), 0)
+  }
+
+  const commitCite = (): void => {
+    if (!editor || !citeSource) return
+    const label = inTextCitation(citeSource, citeStyle, { page: citePage, form: citeForm })
+    const attrs = { sourceId: citeSource.id, page: citePage.trim(), form: citeForm, label }
+    if (citeEditPos !== null) {
+      const pos = citeEditPos
+      editor
+        .chain()
+        .focus()
+        .command(({ tr }) => {
+          tr.setNodeMarkup(pos, undefined, attrs)
+          return true
+        })
+        .run()
+    } else {
+      const frame = citeForm === 'narrative' && citeFrame >= 0 ? SIGNAL_PHRASES[citeFrame] : null
+      const content: Record<string, unknown>[] = []
+      if (frame?.before) content.push({ type: 'text', text: frame.before })
+      content.push({ type: 'citation', attrs })
+      content.push({ type: 'text', text: frame ? frame.after : ' ' })
+      editor.chain().focus().insertContent(content).run()
+    }
+    closeCite()
+  }
+
+  const removeCite = (): void => {
+    if (editor && citeEditPos !== null) {
+      editor.chain().focus().deleteRange({ from: citeEditPos, to: citeEditPos + 1 }).run()
+    }
+    closeCite()
+  }
+
+  // The command palette can start the same flow, so citing is reachable by
+  // keyboard without having to remember a three-key chord.
+  const citeRequests = useStore((s) => s.citeRequests)
+  const seenCiteRequest = useRef(citeRequests)
+  useEffect(() => {
+    // Only a *new* request opens the flow — reopening a paper must not.
+    if (citeRequests === seenCiteRequest.current) return
+    seenCiteRequest.current = citeRequests
+    openCite()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [citeRequests])
+
+  // Keep every marker's text in step with the paper's style and its source, so
+  // switching MLA -> APA (or fixing a typo in an author's name) updates the
+  // whole paper instead of leaving stale brackets behind.
+  useEffect(() => {
+    if (!editor || editor.isDestroyed) return
+    const byId = new Map(sources.map((s) => [s.id, s]))
+    const updates = relabelCitations(editor.state.doc, (a) => {
+      const src = byId.get(a.sourceId)
+      return src ? inTextCitation(src, citeStyle, { page: a.page, form: a.form as CiteForm }) : null
+    })
+    if (!updates.length) return
+    const tr = editor.state.tr
+    for (const u of updates) {
+      const node = editor.state.doc.nodeAt(u.pos)
+      if (node) tr.setNodeMarkup(u.pos, undefined, { ...node.attrs, label: u.label })
+    }
+    editor.view.dispatch(tr)
+  }, [editor, sources, citeStyle])
 
   // Find & replace: Ctrl/Cmd+F opens a small inline bar; Esc closes it.
   const [findOpen, setFindOpen] = useState(false)
@@ -360,7 +521,12 @@ export function Editor(): JSX.Element {
   return (
     <section className="editor-wrap" data-testid="editor" aria-label="Writing area">
       <ThesisPin />
-      <FormatBar editor={editor} onInsertOutline={insertOutline} onFootnote={() => openFootnote(null, '')} />
+      <FormatBar
+        editor={editor}
+        onInsertOutline={insertOutline}
+        onFootnote={() => openFootnote(null, '')}
+        onCite={openCite}
+      />
       {showReentry && (
         <div className="reentry-card" data-testid="reentry-card">
           <div className="reentry-body">
@@ -384,51 +550,179 @@ export function Editor(): JSX.Element {
           </div>
         </div>
       )}
+      {pasteHint && (
+        <div className="capture-bar paste-cite-bar" data-testid="paste-cite-bar">
+          <span className="paste-cite-text">
+            That looks like it came from somewhere. Add the citation now, while you remember?
+          </span>
+          <button
+            className="primary small"
+            data-testid="paste-cite-add"
+            onClick={() => {
+              setPasteHint(null)
+              openCite()
+            }}
+          >
+            Add a citation
+          </button>
+          <button className="ghost small" data-testid="paste-cite-later" onClick={() => setPasteHint(null)}>
+            Not now
+          </button>
+          <button
+            className="link-btn small"
+            data-testid="paste-cite-never"
+            onClick={() => {
+              void updateSettings({ pasteCitePrompt: false })
+              setPasteHint(null)
+            }}
+          >
+            Don’t ask again
+          </button>
+        </div>
+      )}
       {citeOpen && (
         <div className="capture-bar cite-bar" data-testid="cite-popover">
-          <input
-            ref={citeRef}
-            data-testid="cite-input"
-            value={citeQuery}
-            placeholder="Insert a citation — type an author, title, or year…"
-            aria-label="Find a source to cite"
-            onChange={(e) => {
-              setCiteQuery(e.target.value)
-              setCiteActive(0)
-            }}
-            onKeyDown={(e) => {
-              if (e.key === 'Escape') {
-                setCiteOpen(false)
-                editor?.commands.focus()
-              }
-              if (e.key === 'ArrowDown') {
-                e.preventDefault()
-                setCiteActive((a) => Math.min(a + 1, citeMatches.length - 1))
-              }
-              if (e.key === 'ArrowUp') {
-                e.preventDefault()
-                setCiteActive((a) => Math.max(a - 1, 0))
-              }
-              if (e.key === 'Enter') insertCite(citeActive)
-            }}
-          />
-          {citeMatches.length === 0 ? (
-            <span className="muted small" data-testid="cite-empty">
-              No sources yet — add them in the Citations tab.
-            </span>
+          {citeStep === 'pick' ? (
+            <>
+              <input
+                ref={citeRef}
+                data-testid="cite-input"
+                value={citeQuery}
+                placeholder="Which source is this? Type an author, title, or year…"
+                aria-label="Find a source to cite"
+                onChange={(e) => {
+                  setCiteQuery(e.target.value)
+                  setCiteActive(0)
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Escape') closeCite()
+                  if (e.key === 'ArrowDown') {
+                    e.preventDefault()
+                    setCiteActive((a) => Math.min(a + 1, citeMatches.length - 1))
+                  }
+                  if (e.key === 'ArrowUp') {
+                    e.preventDefault()
+                    setCiteActive((a) => Math.max(a - 1, 0))
+                  }
+                  if (e.key === 'Enter') chooseSource(citeActive)
+                }}
+              />
+              {citeMatches.length === 0 ? (
+                <span className="muted small" data-testid="cite-empty">
+                  No sources yet — add them in the Citations tab.
+                </span>
+              ) : (
+                <div className="cite-options">
+                  {citeMatches.slice(0, 6).map((src, i) => (
+                    <button
+                      key={src.id}
+                      className={'chip' + (i === citeActive ? ' selected' : '')}
+                      data-testid="cite-option"
+                      onMouseEnter={() => setCiteActive(i)}
+                      onClick={() => chooseSource(i)}
+                    >
+                      {inTextCitation(src, citeStyle)}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </>
           ) : (
-            <div className="cite-options">
-              {citeMatches.slice(0, 6).map((src, i) => (
-                <button
-                  key={src.id}
-                  className={'chip' + (i === citeActive ? ' selected' : '')}
-                  data-testid="cite-option"
-                  onMouseEnter={() => setCiteActive(i)}
-                  onClick={() => insertCite(i)}
-                >
-                  {formatCitation(src, citeStyle).inText}
+            <div className="cite-details" data-testid="cite-details">
+              <label className="field cite-page-field">
+                <span>Which page is it on?</span>
+                <input
+                  ref={citePageRef}
+                  data-testid="cite-page"
+                  value={citePage}
+                  placeholder="e.g. 42 — leave blank if there isn’t one"
+                  aria-label="Page number for this citation"
+                  onChange={(e) => setCitePage(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Escape') closeCite()
+                    if (e.key === 'Enter') commitCite()
+                  }}
+                />
+              </label>
+
+              <fieldset className="field cite-form-field">
+                <legend>How should it read?</legend>
+                <div className="chips">
+                  <button
+                    type="button"
+                    data-testid="cite-form-parenthetical"
+                    className={'chip' + (citeForm === 'parenthetical' ? ' selected' : '')}
+                    aria-pressed={citeForm === 'parenthetical'}
+                    onClick={() => setCiteForm('parenthetical')}
+                  >
+                    In brackets
+                  </button>
+                  <button
+                    type="button"
+                    data-testid="cite-form-narrative"
+                    className={'chip' + (citeForm === 'narrative' ? ' selected' : '')}
+                    aria-pressed={citeForm === 'narrative'}
+                    onClick={() => setCiteForm('narrative')}
+                  >
+                    In your sentence
+                  </button>
+                </div>
+              </fieldset>
+
+              {citeForm === 'narrative' && citeEditPos === null && (
+                <fieldset className="field cite-frame-field">
+                  <legend>Start the sentence for me (optional)</legend>
+                  <div className="chips">
+                    <button
+                      type="button"
+                      className={'chip' + (citeFrame === -1 ? ' selected' : '')}
+                      aria-pressed={citeFrame === -1}
+                      onClick={() => setCiteFrame(-1)}
+                    >
+                      No thanks
+                    </button>
+                    {SIGNAL_PHRASES.map((p, i) => (
+                      <button
+                        key={p.label}
+                        type="button"
+                        data-testid="cite-frame"
+                        className={'chip' + (citeFrame === i ? ' selected' : '')}
+                        aria-pressed={citeFrame === i}
+                        onClick={() => setCiteFrame(i)}
+                      >
+                        {p.label}
+                      </button>
+                    ))}
+                  </div>
+                </fieldset>
+              )}
+
+              <p className="cite-preview" data-testid="cite-preview">
+                <span className="muted small">This goes in:</span>{' '}
+                <span className="cite-preview-text">
+                  {citeForm === 'narrative' && citeFrame >= 0 && citeEditPos === null
+                    ? `${SIGNAL_PHRASES[citeFrame].before}${citePreview}${SIGNAL_PHRASES[citeFrame].after}…`
+                    : citePreview}
+                </span>
+              </p>
+
+              <div className="row wrap">
+                <button className="primary" data-testid="cite-insert" onClick={commitCite}>
+                  {citeEditPos === null ? 'Put it in' : 'Update it'}
                 </button>
-              ))}
+                {citeEditPos === null ? (
+                  <button className="ghost" data-testid="cite-back" onClick={() => setCiteStep('pick')}>
+                    ← Different source
+                  </button>
+                ) : (
+                  <button className="ghost danger" data-testid="cite-remove" onClick={removeCite}>
+                    Remove it
+                  </button>
+                )}
+                <button className="ghost" onClick={closeCite}>
+                  Cancel
+                </button>
+              </div>
             </div>
           )}
         </div>
@@ -575,9 +869,10 @@ interface FormatBarProps {
   editor: TiptapEditor | null
   onInsertOutline: () => void
   onFootnote: () => void
+  onCite: () => void
 }
 
-function FormatBar({ editor, onInsertOutline, onFootnote }: FormatBarProps): JSX.Element | null {
+function FormatBar({ editor, onInsertOutline, onFootnote, onCite }: FormatBarProps): JSX.Element | null {
   if (!editor) return null
 
   const insertPhrase = (phrase: string): void => {
@@ -653,6 +948,17 @@ function FormatBar({ editor, onInsertOutline, onFootnote }: FormatBarProps): JSX
           ))}
         </div>
       </details>
+
+      <button
+        type="button"
+        className="fmt"
+        data-testid="add-citation"
+        title="Cite a source at the cursor (Ctrl+Shift+C)"
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={onCite}
+      >
+        ❞ Cite
+      </button>
 
       <button
         type="button"

@@ -14,8 +14,8 @@ import {
 } from 'docx'
 import { openPaper } from './papers'
 import { docToPlainText, docToParagraphsWithNotes } from '@shared/doc'
-import type { ParaSegment } from '@shared/doc'
-import { formatCitation, referenceSegments } from '@shared/citations'
+import type { CitationResolver, ParaSegment } from '@shared/doc'
+import { formatCitation, inTextCitation, referenceSegments } from '@shared/citations'
 import {
   citationStyleFor,
   formatSpec,
@@ -41,6 +41,18 @@ function paperFormat(paper: Paper): PaperFormat {
 }
 function wantsPageNumbers(paper: Paper, spec: FormatSpec): boolean {
   return paper.meta.pageNumbers !== false && spec.pageNumber !== 'none'
+}
+
+/** Render each in-text citation from the live source list, so an exported paper
+ *  always matches the paper's current style — never a marker cached earlier. */
+function citationResolver(paper: Paper): CitationResolver {
+  const style = citationStyleFor(paperFormat(paper))
+  const byId = new Map(paper.content.sources.map((s) => [s.id, s]))
+  return (attrs) => {
+    const src = attrs.sourceId ? byId.get(attrs.sourceId) : undefined
+    if (!src) return null
+    return inTextCitation(src, style, { page: attrs.page, form: attrs.form })
+  }
 }
 
 /** Build the export bytes for a paper. Used by exportPaper and the self-test. */
@@ -117,7 +129,7 @@ async function buildDocx(paper: Paper): Promise<Buffer> {
     children.push(new Paragraph({ text: paper.meta.title, heading: HeadingLevel.TITLE }))
   }
 
-  const { paragraphs: segParas, notes } = docToParagraphsWithNotes(paper.content.doc)
+  const { paragraphs: segParas, notes } = docToParagraphsWithNotes(paper.content.doc, citationResolver(paper))
   if (segParas.length === 0) children.push(new Paragraph({ children: [new TextRun('')] }))
   else
     for (const segs of segParas) {
@@ -200,7 +212,10 @@ function renderHtml(paper: Paper): string {
   else if (spec.titleOnBody) body += `<h1 class="doc-title bold">${title}</h1>`
   else if (!spec.titlePage) body += `<h1 class="doc-title">${title}</h1>`
 
-  const { paragraphs: pdfParas, notes: pdfNotes } = docToParagraphsWithNotes(paper.content.doc)
+  const { paragraphs: pdfParas, notes: pdfNotes } = docToParagraphsWithNotes(
+    paper.content.doc,
+    citationResolver(paper)
+  )
   body += pdfParas
     .map(
       (segs) =>
@@ -284,7 +299,8 @@ function buildTxt(paper: Paper): string {
   const head = spec.mlaHeaderBlock ? mlaHeadingLines(heading) : spec.titlePage ? titlePageLines(heading) : []
   if (head.length) lines.push(...head, '')
   lines.push(paper.meta.title, '')
-  const { paragraphs: txtParas, notes: txtNotes } = docToParagraphsWithNotes(paper.content.doc)
+  const resolve = citationResolver(paper)
+  const { paragraphs: txtParas, notes: txtNotes } = docToParagraphsWithNotes(paper.content.doc, resolve)
   if (txtParas.length) {
     lines.push(
       txtParas
@@ -292,7 +308,7 @@ function buildTxt(paper: Paper): string {
         .join('\n\n')
     )
   } else {
-    lines.push(docToPlainText(paper.content.doc))
+    lines.push(docToPlainText(paper.content.doc, { resolveCitation: resolve }))
   }
   if (txtNotes.length) {
     lines.push('', 'Notes')

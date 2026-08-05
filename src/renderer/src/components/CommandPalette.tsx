@@ -39,6 +39,7 @@ export function CommandPalette(): JSX.Element | null {
     if (paperOpen) {
       out.push(
         { id: 'read', label: 'Read to me (read the paper aloud)', run: () => st.openReadAloud() },
+        { id: 'cite', label: 'Cite a source at the cursor', run: () => st.requestCite() },
         { id: 'focus', label: 'Toggle focus mode', run: () => st.toggleFocus() },
         { id: 'board', label: 'Toggle planning board', run: () => st.toggleBoard() },
         { id: 'outline', label: 'Toggle outline panel', run: () => st.toggleOutline() },

@@ -10,7 +10,9 @@ const PROBE = `(async () => {
   const setValue = (el, value) => {
     const proto = el.tagName === 'TEXTAREA'
       ? window.HTMLTextAreaElement.prototype
-      : window.HTMLInputElement.prototype;
+      : el.tagName === 'SELECT'
+        ? window.HTMLSelectElement.prototype
+        : window.HTMLInputElement.prototype;
     Object.getOwnPropertyDescriptor(proto, 'value').set.call(el, value);
     el.dispatchEvent(new Event('input', { bubbles: true }));
     el.dispatchEvent(new Event('change', { bubbles: true }));
@@ -364,6 +366,95 @@ const PROBE = `(async () => {
   q('[data-testid="cite-input"]').dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
   await sleep(80);
   if (q('[data-testid="cite-popover"]')) throw new Error('cite popover did not close');
+
+  // Add a source, then cite it end to end: pick the source, say which page,
+  // choose how it reads, and check a real marker object lands in the paper.
+  (await waitFor('[data-testid="tab-citations"]', 'citations tab')).click();
+  await waitFor('[data-testid="citations-panel"]', 'citations panel');
+  setValue(await waitFor('[data-testid="source-authors"]', 'source authors field'), 'Ng, Priya');
+  setValue(await waitFor('[data-testid="source-title"]', 'source title field'), 'On Memory');
+  setValue(await waitFor('[data-testid="source-year"]', 'source year field'), '2019');
+  (await waitFor('[data-testid="add-source"]', 'add source button')).click();
+  await waitFor('[data-testid="source-unused"]', 'a newly added source reads as not cited yet');
+
+  (await waitFor('[data-testid="add-citation"]', 'cite button in the format bar')).click();
+  const citeOption = await waitFor('[data-testid="cite-option"]', 'the source offered to cite');
+  citeOption.click();
+  const citePage = await waitFor('[data-testid="cite-page"]', 'page field on the citation details step');
+  setValue(citePage, '42');
+  (await waitFor('[data-testid="cite-form-narrative"]', 'narrative form option')).click();
+  await sleep(100);
+  const preview = q('[data-testid="cite-preview"]').textContent;
+  if (!/Ng \\(42\\)/.test(preview)) throw new Error('citation preview did not show the narrative marker: ' + preview);
+  (await waitFor('[data-testid="cite-insert"]', 'insert citation button')).click();
+  await sleep(180);
+
+  const marker = document.querySelector('.prose span.cite-ref');
+  if (!marker) throw new Error('in-text citation marker did not appear in the paper');
+  if (marker.textContent.indexOf('Ng (42)') === -1) {
+    throw new Error('citation marker rendered the wrong text: ' + marker.textContent);
+  }
+  if (marker.getAttribute('data-page') !== '42') throw new Error('citation did not remember its page');
+
+  // Clicking the marker reopens it for correction rather than making the
+  // student edit characters inside brackets.
+  marker.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+  await waitFor('[data-testid="cite-details"]', 'clicking a marker reopens the citation details');
+  if (q('[data-testid="cite-page"]').value !== '42') throw new Error('reopened citation lost its page');
+  await waitFor('[data-testid="cite-remove"]', 'an existing citation can be removed');
+  q('[data-testid="cite-page"]').dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  await sleep(100);
+
+  // The command palette reaches the same flow, so citing does not depend on
+  // remembering a three-key chord.
+  window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true, bubbles: true }));
+  const pal2 = await waitFor('[data-testid="palette-input"]', 'command palette for citing');
+  setValue(pal2, 'cite a source');
+  pal2.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+  await waitFor('[data-testid="cite-popover"]', 'palette opened the cite flow');
+  q('[data-testid="cite-input"]').dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  await sleep(100);
+
+  // The Citations tab now knows the source is actually used.
+  (await waitFor('[data-testid="tab-citations"]', 'citations tab again')).click();
+  await waitFor('[data-testid="source-used"]', 'the source now reads as cited');
+  const usedSummary = (await waitFor('[data-testid="used-summary"]', 'used-sources summary')).textContent;
+  if (!/1 of|All 1/.test(usedSummary)) throw new Error('used summary did not count the citation: ' + usedSummary);
+  (await waitFor('[data-testid="tab-assignment"]', 'back to assignment tab')).click();
+  await sleep(80);
+
+  // Because the marker is an object, switching the paper's style restyles it
+  // in place — the student never has to retype a bracket.
+  {
+    const details2 = await waitFor('[data-testid="paper-details"]', 'paper details for a style switch');
+    details2.open = true;
+    setValue(await waitFor('[data-testid="meta-format"]', 'paper format select'), 'apa');
+    const started = Date.now();
+    let restyled = '';
+    while (Date.now() - started < 4000) {
+      const markerNow = document.querySelector('.prose span.cite-ref');
+      restyled = markerNow ? markerNow.textContent : '';
+      if (restyled.indexOf('2019') !== -1) break;
+      await sleep(100);
+    }
+    if (restyled.indexOf('Ng (2019, p. 42)') === -1) {
+      throw new Error('switching to APA did not restyle the citation marker: ' + restyled);
+    }
+    setValue(q('[data-testid="meta-format"]'), 'mla');
+    await sleep(250);
+  }
+
+  // Paste guard: a long paste offers the citation instead of silently letting
+  // source material become the student's own words.
+  {
+    const dt = new DataTransfer();
+    dt.setData('text/plain', 'Memory is not a recording but a reconstruction that shifts each time a person recalls an event in a new setting.');
+    q('.prose').dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true }));
+    await waitFor('[data-testid="paste-cite-bar"]', 'paste offers a citation');
+    (await waitFor('[data-testid="paste-cite-later"]', 'dismiss the paste offer')).click();
+    await sleep(120);
+    if (q('[data-testid="paste-cite-bar"]')) throw new Error('paste offer did not dismiss');
+  }
 
   // Footnotes: add one from the format bar; a numbered marker appears.
   (await waitFor('[data-testid="add-footnote"]', 'footnote button')).click();

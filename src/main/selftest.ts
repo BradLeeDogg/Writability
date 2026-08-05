@@ -17,8 +17,8 @@ import { outlineToDocContent } from '@shared/scaffold'
 import { TRANSITIONS } from '@shared/transitions'
 import { GLOSSARY, glossaryMap } from '@shared/glossary'
 import { summarizeSource } from '@shared/reading'
-import { formatCitation, referenceSegments } from '@shared/citations'
-import { docToPlainText, splitSentences, sentenceIndexAt, splitWords, wordIndexAt, replaceWordInDoc, docToParagraphsWithNotes } from '@shared/doc'
+import { formatCitation, inTextCitation, referenceSegments } from '@shared/citations'
+import { docToPlainText, splitSentences, sentenceIndexAt, splitWords, wordIndexAt, replaceWordInDoc, docToParagraphsWithNotes, collectCitations, citationCounts } from '@shared/doc'
 import { estimatePages, pageStats, WORDS_PER_PAGE, formatSpec, lastNameOf, mlaHeadingLines } from '@shared/format'
 import { coachContext } from '@shared/coach'
 import { pickVoice, sortVoices } from '@shared/voices'
@@ -375,6 +375,81 @@ export async function runSelftest(): Promise<void> {
     assert.ok(journalSegs.some((x) => x.italic && x.text === '12'), 'APA journal volume is italic')
     assert.ok(!journalSegs.some((x) => x.italic && x.text.includes('On Memory')), 'article title stays roman')
     pass('citations (mla/apa/chicago)')
+
+    // --- in-text citations: the quoted page, and how it reads ------------
+    const quoted = {
+      id: 'src-q',
+      type: 'journal' as const,
+      authors: ['Ng, Priya'],
+      title: 'On Memory',
+      containerTitle: 'Journal of Studies',
+      volume: '12',
+      pages: '33-47',
+      year: '2019'
+    }
+    // The source's own page range is the extent of the whole article; it belongs
+    // in the reference entry and must never become the in-text locator.
+    assert.equal(inTextCitation(quoted, 'mla'), '(Ng)', 'no locator unless the student gives one')
+    assert.equal(inTextCitation(quoted, 'mla', { page: '42' }), '(Ng 42)')
+    assert.equal(inTextCitation(quoted, 'apa', { page: '42' }), '(Ng, 2019, p. 42)')
+    assert.equal(inTextCitation(quoted, 'apa', { page: '42-45' }), '(Ng, 2019, pp. 42-45)', 'a range takes pp.')
+    assert.equal(inTextCitation(quoted, 'chicago', { page: '42' }), '(Ng 2019, 42)')
+    // Narrative form lifts the author out of the brackets and into the prose.
+    assert.equal(inTextCitation(quoted, 'mla', { page: '42', form: 'narrative' }), 'Ng (42)')
+    assert.equal(inTextCitation(quoted, 'apa', { page: '42', form: 'narrative' }), 'Ng (2019, p. 42)')
+    assert.equal(inTextCitation(quoted, 'mla', { form: 'narrative' }), 'Ng')
+    // Typing "p. 42" or "pages 42" lands in the same place as typing "42".
+    assert.equal(inTextCitation(quoted, 'mla', { page: 'p. 42' }), '(Ng 42)')
+    assert.equal(inTextCitation(quoted, 'apa', { page: 'pages 42' }), '(Ng, 2019, p. 42)')
+
+    const citeDoc = {
+      type: 'doc',
+      content: [
+        {
+          type: 'paragraph',
+          content: [
+            { type: 'text', text: 'Memory is malleable ' },
+            { type: 'citation', attrs: { sourceId: 'src-q', page: '42', form: 'parenthetical', label: '(Ng 42)' } },
+            { type: 'text', text: '.' }
+          ]
+        },
+        {
+          type: 'paragraph',
+          content: [
+            { type: 'citation', attrs: { sourceId: 'src-q', page: '7', form: 'narrative', label: 'Ng (7)' } },
+            { type: 'text', text: ' argues the opposite.' },
+            { type: 'citation', attrs: { sourceId: 'src-gone', page: '', form: 'parenthetical', label: '(Vanished 3)' } }
+          ]
+        }
+      ]
+    }
+    assert.equal(collectCitations(citeDoc).length, 3, 'every citation is collected in order')
+    assert.equal(citationCounts(citeDoc)['src-q'], 2, 'a source cited twice counts twice')
+
+    const citePaper = createPaper({ title: 'Cited paper', essayType: 'research' })
+    citePaper.content.doc = citeDoc
+    citePaper.content.sources = [quoted]
+    savePaper({ meta: { ...citePaper.meta, format: 'mla' }, content: citePaper.content })
+    const citeMla = (await renderExport(openPaper(citePaper.meta.id)!, 'txt')).toString('utf8')
+    assert.ok(citeMla.includes('(Ng 42)'), 'MLA export renders the in-text marker')
+    assert.ok(citeMla.includes('Ng (7) argues'), 'a narrative marker keeps the author in the sentence')
+    assert.ok(citeMla.includes('(Vanished 3)'), 'a citation whose source was deleted keeps its last-known text')
+
+    // The marker is an object, not typed characters, so restyling the paper
+    // restyles every citation in it.
+    savePaper({ meta: { ...citePaper.meta, format: 'apa' }, content: citePaper.content })
+    const citeApa = (await renderExport(openPaper(citePaper.meta.id)!, 'txt')).toString('utf8')
+    assert.ok(citeApa.includes('(Ng, 2019, p. 42)'), 'switching the paper to APA restyles the marker')
+    assert.ok(!citeApa.includes('(Ng 42)'), 'the old MLA marker is gone, not left behind')
+    const citeDocx = await renderExport(openPaper(citePaper.meta.id)!, 'docx')
+    assert.ok(citeDocx.length > 100, 'docx with citations renders')
+
+    // Read-aloud says the citation instead of stumbling over brackets.
+    const spokenCite = docToPlainText(citeDoc, { spokenCitations: true })
+    assert.ok(spokenCite.includes('citation: Ng 42'), 'read-aloud speaks the citation as words')
+    assert.ok(!spokenCite.includes('(Ng 42)'), 'read-aloud does not read the brackets aloud')
+    assert.ok(docToPlainText(citeDoc).includes('(Ng 42)'), 'on the page it still reads as a normal marker')
+    pass('in-text citations (page, form, restyle, export)')
 
     // --- export ---------------------------------------------------------
     const docxBytes = await renderExport(reopened!, 'docx')

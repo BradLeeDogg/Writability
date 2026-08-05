@@ -165,18 +165,82 @@ function chicagoReference(s: CitationSource): string {
 
 // --- In-text markers --------------------------------------------------------
 
-function inText(s: CitationSource, style: CitationStyle): string {
-  const who = inTextAuthor(s, style)
-  if (style === 'mla') {
-    return `(${join([who, s.pages]).trim()})`
-  }
-  if (style === 'apa') {
-    const page = s.pages ? `, p. ${s.pages}` : ''
-    return `(${who}, ${s.year || 'n.d.'}${page})`
-  }
-  const page = s.pages ? `, ${s.pages}` : ''
-  return `(${who} ${s.year || 'n.d.'}${page})`
+/**
+ * How the marker sits in the sentence.
+ * - `parenthetical`: everything in brackets — "(Smith 42)".
+ * - `narrative`: the author is part of the prose, the rest is bracketed —
+ *   "Smith (42) argues that…".
+ */
+export type CiteForm = 'parenthetical' | 'narrative'
+
+export interface InTextOptions {
+  /**
+   * The page (or page range) this particular quote came from. This is *not*
+   * the source's `pages` field — that is the whole work's extent and belongs
+   * only in the reference list. Blank is valid: a paraphrase of a whole work,
+   * or a source with no pagination, takes no locator.
+   */
+  page?: string
+  form?: CiteForm
 }
+
+/** Locator text for an in-text marker. APA is the only style that writes "p."/"pp.". */
+function locatorFor(page: string | undefined, style: CitationStyle): string {
+  // Tolerate students typing "p. 42" or "pages 42-45" — we add the label back.
+  const p = (page ?? '').trim().replace(/^(pp?\.|pages?)\s*/i, '').trim()
+  if (!p) return ''
+  if (style !== 'apa') return p
+  const spansSeveral = /[-–—,\s]/.test(p)
+  return `${spansSeveral ? 'pp.' : 'p.'} ${p}`
+}
+
+/**
+ * Build the in-text marker for one specific citation. Unlike the reference
+ * entry, this needs to know *where in the source* the student is pointing, so
+ * the page is passed per citation rather than read off the source.
+ */
+export function inTextCitation(
+  source: CitationSource,
+  style: CitationStyle,
+  opts: InTextOptions = {}
+): string {
+  const who = inTextAuthor(source, style)
+  const loc = locatorFor(opts.page, style)
+  const narrative = opts.form === 'narrative'
+
+  if (style === 'mla') {
+    if (narrative) return loc ? `${who} (${loc})` : who
+    return `(${join([who, loc]).trim()})`
+  }
+
+  const year = source.year || 'n.d.'
+  const inner = loc ? `${year}, ${loc}` : year
+  if (narrative) return `${who} (${inner})`
+  return style === 'apa' ? `(${who}, ${inner})` : `(${who} ${inner})`
+}
+
+function inText(s: CitationSource, style: CitationStyle): string {
+  return inTextCitation(s, style)
+}
+
+/**
+ * Sentence frames for narrative citations. Knowing *how* to introduce a source
+ * is the part students get stuck on far more often than the brackets, so the
+ * marker can be dropped into a ready-made frame: `before` + marker + `after`.
+ */
+export interface SignalPhrase {
+  label: string
+  before: string
+  after: string
+}
+
+export const SIGNAL_PHRASES: SignalPhrase[] = [
+  { label: 'According to …', before: 'According to ', after: ', ' },
+  { label: '… argues that', before: '', after: ' argues that ' },
+  { label: '… explains that', before: '', after: ' explains that ' },
+  { label: '… found that', before: '', after: ' found that ' },
+  { label: 'As … puts it,', before: 'As ', after: ' puts it, ' }
+]
 
 export function formatCitation(source: CitationSource, style: CitationStyle): FormattedCitation {
   let reference: string

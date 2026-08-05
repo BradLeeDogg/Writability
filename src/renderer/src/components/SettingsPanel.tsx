@@ -256,6 +256,24 @@ export function SettingsPanel(): JSX.Element {
       </label>
       </details>
 
+      <details className="settings-group" data-testid="group-citing">
+        <summary>Citing sources</summary>
+        <label className="toggle">
+          <input
+            type="checkbox"
+            data-testid="toggle-paste-cite"
+            checked={settings.pasteCitePrompt !== false}
+            onChange={(e) => update({ pasteCitePrompt: e.target.checked })}
+          />
+          <span>After pasting a long passage, offer to add the citation</span>
+        </label>
+        <p className="hint">
+          Citations you insert are kept as objects, not typed brackets — click one in your paper to
+          change its page or its source, and they restyle themselves if you change the paper’s
+          format.
+        </p>
+      </details>
+
       <details className="settings-group" data-testid="group-spelling">
         <summary>Spelling help</summary>
       <label className="toggle">

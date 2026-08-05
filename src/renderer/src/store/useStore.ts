@@ -44,6 +44,8 @@ interface StoreState {
   boardOpen: boolean
   /** When true, the immersive "Read to me" overlay is open. */
   readAloudOpen: boolean
+  /** Bumped to ask the editor to open its cite-a-source flow (palette route). */
+  citeRequests: number
 
   // lifecycle
   init: () => Promise<void>
@@ -126,6 +128,7 @@ interface StoreState {
   toggleFocus: () => void
   toggleBoard: () => void
   openReadAloud: () => void
+  requestCite: () => void
   closeReadAloud: () => void
 
   // export
@@ -194,6 +197,7 @@ export const useStore = create<StoreState>()((set, get) => {
     toolsTab: 'assignment',
     boardOpen: false,
     readAloudOpen: false,
+    citeRequests: 0,
     toast: null,
     confirmBox: null,
     saveFails: 0,
@@ -670,6 +674,9 @@ export const useStore = create<StoreState>()((set, get) => {
       set((s) => ({ boardOpen: !s.boardOpen }))
     },
 
+    requestCite() {
+      set((s) => ({ citeRequests: s.citeRequests + 1 }))
+    },
     openReadAloud() {
       set({ readAloudOpen: true })
     },

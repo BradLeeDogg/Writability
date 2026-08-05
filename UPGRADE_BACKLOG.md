@@ -8,6 +8,21 @@
 > (T10), the ≥3-papers start-leaner nudge with a permanent "don't ask again"
 > (T13), and a 20-minute snapshot interval alongside snapshot-on-open (T14).
 
+> **Follow-up beyond the 18 tickets: accessible in-text citations.** T9 gave
+> students a fast way to *insert* a marker, but the marker was plain text built
+> from the source's own `pages` field — the whole work's extent, not the page
+> being quoted — so every inserted citation was incomplete (`(Smith)` for a
+> book) or wrong (`(Smith 33-47)` for an article), fixable only by typing
+> between two brackets. In-text citations are now objects (`citation` node,
+> `sourceId` + `page` + `form` + cached `label`): the page is asked for in plain
+> words at insert time, the student chooses bracketed or narrative phrasing with
+> an optional sentence frame, markers restyle themselves when the paper's format
+> changes, a marker deletes atomically and reopens for correction on click or
+> Enter, read-aloud speaks them as words, exports resolve them live from the
+> source list, a long paste offers the citation, and the Citations tab reports
+> which sources are actually cited. Reachable from a visible **Cite** button,
+> Ctrl+Shift+C, and the command palette.
+
 Implements `REVIEW_FINDINGS.md` (v2). Every ticket: problem → change → acceptance → effort (S ≤ ½ day, M ≤ 2 days, L multi-day) → personas → ethos check (*reduces cognitive load and increases the student's own capability, without noise, pressure, or dependence*). Standing gate for all tickets: typecheck + build + selftest + smoke green, with a new selftest/smoke assertion wherever the change has pure logic or visible UI.
 
 ## Cross-cutting themes (plain names)

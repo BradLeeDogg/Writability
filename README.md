@@ -25,6 +25,14 @@ Writability lowers the real barriers to academic writing:
 Plus **read-aloud** (proofread by ear), **Word / PDF / text export**, and an
 **MLA / APA / Chicago** citation helper.
 
+In-text citations are inserted as *objects*, not typed brackets: pick the
+source, say which page, choose whether it reads in brackets — "(Smith 42)" — or
+in your sentence — "Smith (42) argues that…" — with an optional sentence
+starter. A marker restyles itself if the paper's format changes, deletes as one
+piece, can be corrected by clicking it (or selecting it and pressing Enter), and
+lets the app say which sources are actually cited. Pasting a long passage offers
+the citation there and then.
+
 > Feedback in Writability is meant to be gentle, literal, and specific — it says
 > *why* something might help, and never uses idioms or ambiguous wording.
 

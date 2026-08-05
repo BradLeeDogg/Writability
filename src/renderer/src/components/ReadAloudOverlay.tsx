@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useStore } from '../store/useStore'
 import { docToPlainText, splitSentences, splitWords, sentenceIndexAt, wordIndexAt } from '@shared/doc'
+import { inTextCitation } from '@shared/citations'
+import { citationStyleFor } from '@shared/format'
 import { isPaused, pauseSpeaking, resumeSpeaking, speak, stopSpeaking, ttsSupported } from '../lib/tts'
 
 // Immersive "Read to me" mode. A calm, full-screen reader that uses the
@@ -13,11 +15,26 @@ export function ReadAloudOverlay(): JSX.Element | null {
   const open = useStore((s) => s.readAloudOpen)
   const close = useStore((s) => s.closeReadAloud)
   const doc = useStore((s) => s.current?.content.doc)
+  const sources = useStore((s) => s.current?.content.sources)
+  const paperFormat = useStore((s) => s.current?.meta.format)
   const ttsRate = useStore((s) => s.settings.ttsRate)
   const ttsPitch = useStore((s) => s.settings.ttsPitch)
   const ttsVoice = useStore((s) => s.settings.ttsVoice)
 
-  const text = useMemo(() => docToPlainText(doc), [doc])
+  // Citations are spoken as words ("citation: Smith 42") rather than read as
+  // punctuation, so a student checking their work by ear can hear that a claim
+  // is sourced instead of hearing the reader trip over brackets.
+  const text = useMemo(() => {
+    const style = citationStyleFor(paperFormat ?? 'none')
+    const byId = new Map((sources ?? []).map((s) => [s.id, s]))
+    return docToPlainText(doc, {
+      spokenCitations: true,
+      resolveCitation: (attrs) => {
+        const src = attrs.sourceId ? byId.get(attrs.sourceId) : undefined
+        return src ? inTextCitation(src, style, { page: attrs.page, form: attrs.form }) : null
+      }
+    })
+  }, [doc, sources, paperFormat])
   const sentences = useMemo(() => splitSentences(text), [text])
   const words = useMemo(() => splitWords(text), [text])
   // Group words under their sentence once, so each render is linear.

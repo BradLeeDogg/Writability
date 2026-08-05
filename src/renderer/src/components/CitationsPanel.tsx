@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useStore } from '../store/useStore'
 import { copyText } from '../lib/format'
-import { CITATION_STYLE_LABELS, formatCitation, referenceSegments } from '@shared/citations'
+import { CITATION_STYLE_LABELS, formatCitation, inTextCitation, referenceSegments } from '@shared/citations'
+import { citationCounts } from '@shared/doc'
 import { uid } from '@shared/ids'
 import type { CitationSource, CitationStyle, SourceType } from '@shared/types'
 
@@ -44,12 +45,6 @@ export function CitationsPanel(): JSX.Element {
   const editorInstance = useStore((st) => st.editorInstance)
   const showToastCit = useStore((st) => st.showToast)
   const [sourceFilter, setSourceFilter] = useState('')
-  const insertInText = (marker: string): void => {
-    if (editorInstance && !editorInstance.isDestroyed) {
-      editorInstance.chain().focus().insertContent(marker + ' ').run()
-      showToastCit('Citation added where your cursor was.')
-    }
-  }
   const current = useStore((s) => s.current)!
   const addSource = useStore((s) => s.addSource)
   const removeSource = useStore((s) => s.removeSource)
@@ -59,6 +54,35 @@ export function CitationsPanel(): JSX.Element {
   const [copied, setCopied] = useState<string | null>(null)
 
   const sources = current.content.sources
+
+  // Which sources actually appear in the paper. Answers the question students
+  // cannot easily check by eye: "is everything on my list really cited, and is
+  // everything I cited really on my list?"
+  const used = useMemo(() => citationCounts(current.content.doc), [current.content.doc])
+  const usedCount = sources.filter((s) => (used[s.id] ?? 0) > 0).length
+
+  // Inserts a real citation object (not typed characters), so it restyles with
+  // the paper and can be corrected later by clicking it.
+  const insertInText = (source: CitationSource): void => {
+    if (!editorInstance || editorInstance.isDestroyed) return
+    editorInstance
+      .chain()
+      .focus()
+      .insertContent([
+        {
+          type: 'citation',
+          attrs: {
+            sourceId: source.id,
+            page: '',
+            form: 'parenthetical',
+            label: inTextCitation(source, style)
+          }
+        },
+        { type: 'text', text: ' ' }
+      ])
+      .run()
+    showToastCit('Citation added where your cursor was. Click it to add a page.')
+  }
   const set = (patch: Partial<Draft>): void => setDraft((d) => ({ ...d, ...patch }))
 
   const onAdd = (): void => {
@@ -119,6 +143,13 @@ export function CitationsPanel(): JSX.Element {
             onChange={(e) => setSourceFilter(e.target.value)}
           />
         )}
+        {sources.length > 0 && (
+          <p className="used-summary" data-testid="used-summary">
+            {usedCount === sources.length
+              ? `All ${sources.length} of your sources are cited in the paper.`
+              : `${usedCount} of your ${sources.length} sources are cited in the paper so far.`}
+          </p>
+        )}
         {sources.length === 0 ? (
           <p className="muted">No sources yet. Add one below and it will be formatted for you.</p>
         ) : (
@@ -141,7 +172,18 @@ export function CitationsPanel(): JSX.Element {
                       seg.italic ? <em key={i}>{seg.text}</em> : <span key={i}>{seg.text}</span>
                     )}
                   </p>
-                  <p className="source-intext">In-text: {f.inText}</p>
+                  <p className="source-intext">
+                    In-text: {f.inText}
+                    {(used[s.id] ?? 0) > 0 ? (
+                      <span className="used-badge" data-testid="source-used">
+                        Cited {used[s.id]}×
+                      </span>
+                    ) : (
+                      <span className="used-badge unused" data-testid="source-unused">
+                        Not cited yet
+                      </span>
+                    )}
+                  </p>
                   <div className="row wrap">
                     <button className="ghost small" onClick={() => void doCopy(s.id + '-ref', f.reference)}>
                       {copied === s.id + '-ref' ? 'Copied' : 'Copy reference'}
@@ -154,7 +196,7 @@ export function CitationsPanel(): JSX.Element {
                         className="ghost small"
                         data-testid="insert-citation"
                         title="Put the in-text citation where your cursor is"
-                        onClick={() => insertInText(f.inText)}
+                        onClick={() => insertInText(s)}
                       >
                         Insert in paper
                       </button>
@@ -191,6 +233,7 @@ export function CitationsPanel(): JSX.Element {
           <span>Author(s) — one per line, “Last, First”</span>
           <textarea
             rows={2}
+            data-testid="source-authors"
             value={draft.authors}
             placeholder={'Smith, John\nDoe, Jane'}
             onChange={(e) => set({ authors: e.target.value })}
@@ -199,7 +242,11 @@ export function CitationsPanel(): JSX.Element {
 
         <label className="field">
           <span>Title</span>
-          <input value={draft.title} onChange={(e) => set({ title: e.target.value })} />
+          <input
+            data-testid="source-title"
+            value={draft.title}
+            onChange={(e) => set({ title: e.target.value })}
+          />
         </label>
 
         {draft.type !== 'book' && (
@@ -221,7 +268,11 @@ export function CitationsPanel(): JSX.Element {
           )}
           <label className="field grow">
             <span>Year</span>
-            <input value={draft.year} onChange={(e) => set({ year: e.target.value })} />
+            <input
+              data-testid="source-year"
+              value={draft.year}
+              onChange={(e) => set({ year: e.target.value })}
+            />
           </label>
         </div>
 
@@ -259,7 +310,7 @@ export function CitationsPanel(): JSX.Element {
           </>
         )}
 
-        <button className="primary" onClick={onAdd} disabled={!draft.title.trim()}>
+        <button className="primary" data-testid="add-source" onClick={onAdd} disabled={!draft.title.trim()}>
           Add source
         </button>
         <p className="hint">Titles of books and journals should be italicised in your final paper.</p>
